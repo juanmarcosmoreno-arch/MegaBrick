@@ -30,6 +30,7 @@ El juego se construye por etapas. Siempre queda una versión jugable.
 | 8 | Joystick (Xbox, PlayStation y otros): jugar y usar los menús | ✅ |
 | 9 | Materiales de construcción: madera, piedra, ladrillo, revoque de colores, tejas, escalones, losas, puertas, ventanas y faroles; menú de materiales | ✅ |
 | 10 | Animales: carpincho, oveja, gallina y conejo (acariciarlos, empujarlos, te siguen), también en el multijugador | ✅ |
+| 11 | Resistencia de los materiales: romper tarda distinto según el bloque, con grietas | ✅ |
 
 ## Requisitos
 
@@ -75,7 +76,7 @@ Ejemplo: `http://localhost:5173/megabrick/?semilla=islas&distancia=8`.
 | **Ctrl** (o doble toque de **W**) | Correr: más rápido y con la vista un poco más abierta |
 | **F** | Activar o desactivar el vuelo |
 | **Espacio / Shift** (volando) | Subir / bajar |
-| **Clic izquierdo** | Romper el bloque apuntado (mantenido, sigue rompiendo). Sobre un animal: empujarlo |
+| **Clic izquierdo** | Romper el bloque apuntado: mantenelo apretado; cada material tarda distinto (ver Resistencia). Sobre un animal: empujarlo |
 | **Clic derecho** | Poner el bloque elegido en la cara apuntada. Sobre un animal: acariciarlo |
 | **1 – 9** o **rueda del mouse** | Elegir casilla de la hotbar |
 | **E** | Menú de materiales: elegir qué bloque va en cada casilla (E o Esc lo cierran) |
@@ -94,7 +95,7 @@ También se juega con un joystick de Xbox, de PlayStation o cualquiera que el na
 | **A / ✕** | Saltar, nadar hacia arriba o subir volando |
 | **B / ○** | Bajar volando |
 | **Y / △** | Activar o desactivar el vuelo |
-| **RT / R2** | Romper (mantenido, sigue rompiendo) |
+| **RT / R2** | Romper (mantenido, como el clic izquierdo) |
 | **LT / L2** | Poner el bloque elegido |
 | **LB RB / L1 R1** | Elegir casilla de la hotbar |
 | **Vista / Create** | Menú de materiales (adentro, LB RB cambian de casilla, A pone el material y B vuelve) |
@@ -117,7 +118,17 @@ Algunas cosas siguen pidiendo el teclado o el mouse: escribir (nombre de un mund
 ### Construir
 
 - **Bloque apuntado:** la mira del centro marca el bloque al que apuntás, con un contorno, hasta 6 bloques de distancia. El cálculo es un raycast voxel con el algoritmo DDA, que no saltea ningún bloque. El agua se atraviesa con la mirada.
-- **Romper y poner:** clic izquierdo rompe el bloque, salvo el lecho primordial, que es indestructible. Clic derecho pone el bloque elegido sobre la cara apuntada, pero nunca dentro del jugador. Manteniendo el botón, se repite cada cuarto de segundo.
+- **Romper y poner:** para romper un bloque hay que mantener apretado el clic izquierdo el tiempo que resiste su material; mientras tanto el bloque se va agrietando y suena un golpecito. Si soltás o apuntás a otro bloque, se empieza de nuevo. El lecho primordial es indestructible. Clic derecho pone el bloque elegido sobre la cara apuntada, pero nunca dentro del jugador; manteniendo el botón, se pone uno cada cuarto de segundo.
+- **Resistencia:** cada material tarda distinto en romperse (los escalones y las losas, lo mismo que su material):
+
+  | Tarda | Materiales |
+  |---|---|
+  | 0,15 – 0,3 s | Follaje, vidrio, ventana, paja |
+  | 0,35 – 0,4 s | Césped, arena, tierra, farol |
+  | 0,5 – 0,7 s | Puertas, biblioteca, tablones (claros, comunes, rojizos y oscuros), parqué, revoque |
+  | 0,8 – 0,9 s | Tronco, arenisca, tejas, baldosas |
+  | 1 – 1,2 s | Piedra, empedrado, ladrillos, piedra lisa, ladrillo de piedra |
+  | 1,3 – 1,8 s | Mármol y los minerales (cobrizo, azurita y, la más dura, solarita) |
 - **Hotbar:** tiene 9 casillas abajo de la pantalla. Un mundo nuevo empieza con césped, tierra, piedra, tablones, ladrillo de piedra, vidrio, tronco, follaje y arena. El bloque elegido se ve en la mano, en primera persona y también en el personaje en tercera persona.
 - **Menú de materiales (E):** muestra todos los bloques para construir, en 7 grupos: naturaleza, madera, piedra y ladrillo, revoque de colores, techos, escalones y losas, y puertas, ventanas y detalles. Arriba están las 9 casillas: elegís una y después el material que va en ella (también con las teclas 1 – 9). Lo que ponés en la hotbar se guarda con el mundo.
 - **Escalones:** se ponen mirando hacia donde mirás, con la parte alta del lado de enfrente, así que para hacer una escalera o un techo a dos aguas alcanza con mirar hacia donde sube. Se suben caminando, sin saltar.

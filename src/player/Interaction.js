@@ -2,6 +2,11 @@
 // contorno, clic izquierdo para romper y clic derecho para poner (con
 // joystick, gatillo derecho y gatillo izquierdo).
 //
+// Romper pide mantener el botón: cada material tiene su resistencia (los
+// segundos que tarda, ver `hardness` en blocks.js). Mientras tanto el
+// bloque se agrieta y suena un golpecito; si se suelta o se apunta a otro,
+// se empieza de nuevo.
+//
 // Los escalones y las puertas se ponen mirando hacia donde mira el jugador;
 // una losa va arriba si se apunta a la mitad de arriba de una cara (o a un
 // techo). Clic derecho sobre una puerta la abre o la cierra.
@@ -17,8 +22,10 @@ import { raycast } from './Raycast.js';
 
 /** Alcance en bloques. */
 export const REACH = 6;
-/** Tiempo entre acciones al mantener apretado el botón (segundos). */
+/** Tiempo entre bloques puestos al mantener apretado el botón (segundos). */
 const REPEAT = 0.25;
+/** Cada cuánto suena un golpe mientras se rompe (segundos). */
+const HIT_EVERY = 0.25;
 
 /** Se puede apuntar a todo lo que no sea aire ni líquido (el agua se atraviesa). */
 const isTarget = (id) => id !== BLOCK.AIR && !getBlock(id).liquid;
@@ -55,9 +62,13 @@ export class BlockInteraction {
     this.onAnimal = onAnimal;
     this.target = null; // bloque apuntado (o null)
     this.animalTarget = null; // animal apuntado (o null)
-    this._breakTimer = 0;
     this._placeTimer = 0;
     this._breaking = false;
+    this._mining = null; // bloque que se está rompiendo: "x,y,z,id"
+    this._mineTime = 0; // segundos que lleva
+    this._hitTimer = 0;
+    /** Cuánto falta para romperlo, de 0 a 1 (para las grietas). */
+    this.breakProgress = 0;
     this._eye = new THREE.Vector3();
     this._dir = new THREE.Vector3();
   }
@@ -80,7 +91,6 @@ export class BlockInteraction {
       -Math.cos(p.yaw) * Math.cos(p.pitch),
     );
     this.target = raycast(this.world, this._eye, this._dir, REACH, isTarget);
-    this._breakTimer -= dt;
     this._placeTimer -= dt;
     const pad = controls.pad;
 
@@ -90,32 +100,68 @@ export class BlockInteraction {
     this.animalTarget = hit && (!this.target || hit.distance < this.target.distance) ? hit.animal : null;
     if (this.animalTarget) {
       this._breaking = false;
+      this._stopMining();
       this.outline.show(null);
       if (controls.wasClicked(2) || pad.wasPressed(PAD.LT)) this.onAnimal?.('pet', this.animalTarget);
       else if (controls.wasClicked(0) || pad.wasPressed(PAD.RT)) this.onAnimal?.('poke', this.animalTarget);
       return;
     }
 
-    // Al apretar actúa enseguida; si se mantiene, repite cada REPEAT segundos.
-    this._breaking = controls.isMouseDown(0) || pad.isDown(PAD.RT);
+    // Romper: mantener el botón el tiempo que resiste el bloque.
+    this._breaking = controls.isMouseDown(0) || pad.isDown(PAD.RT) || controls.wasClicked(0) || pad.wasPressed(PAD.RT);
+    let changed = this._mine(dt);
+    // Poner: al apretar actúa enseguida; si se mantiene, repite cada REPEAT segundos.
     const placing = controls.isMouseDown(2) || pad.isDown(PAD.LT);
-    let changed = false;
-    if (controls.wasClicked(0) || pad.wasPressed(PAD.RT) || (this._breaking && this._breakTimer <= 0)) {
-      this._breakTimer = REPEAT;
-      changed = this.breakTarget() || changed;
-    }
     if (controls.wasClicked(2) || pad.wasPressed(PAD.LT) || (placing && this._placeTimer <= 0)) {
       this._placeTimer = REPEAT;
       changed = this.placeAtTarget() || changed;
     }
     // Si el mundo cambió, el contorno va sobre el bloque que quedó apuntado.
     if (changed) this.target = raycast(this.world, this._eye, this._dir, REACH, isTarget);
-    this.outline.show(this.target);
+    this.outline.show(this.target, this.breakProgress);
+  }
+
+  /**
+   * Avanza la rotura del bloque apuntado mientras se mantiene el botón.
+   * Devuelve true si se rompió.
+   */
+  _mine(dt) {
+    const t = this.target;
+    const block = t && getBlock(t.id);
+    if (!this._breaking || !block?.breakable) {
+      this._stopMining();
+      return false;
+    }
+    const key = `${t.x},${t.y},${t.z},${t.id}`;
+    if (key !== this._mining) {
+      // Otro bloque (o recién se aprieta): se empieza de cero.
+      this._mining = key;
+      this._mineTime = 0;
+      this._hitTimer = 0;
+    }
+    this._mineTime += dt;
+    this._hitTimer -= dt;
+    if (this._hitTimer <= 0) {
+      this._hitTimer = HIT_EVERY;
+      this.onAction?.('hit', t.id);
+    }
+    this.breakProgress = Math.min(1, this._mineTime / block.hardness);
+    if (this._mineTime < block.hardness) return false;
+    this._stopMining();
+    return this.breakTarget();
+  }
+
+  _stopMining() {
+    this._mining = null;
+    this._mineTime = 0;
+    this._hitTimer = 0;
+    this.breakProgress = 0;
   }
 
   /** Deja de "romper" (por ejemplo, al pausar con el botón apretado). */
   release() {
     this._breaking = false;
+    this._stopMining();
   }
 
   /**

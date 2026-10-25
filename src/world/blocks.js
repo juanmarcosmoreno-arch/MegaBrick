@@ -82,6 +82,8 @@ export const CATEGORIES = Object.freeze([
  * - item: el bloque que lo representa en la hotbar y el menú (las otras
  *   orientaciones de un escalón o una puerta muestran el mismo).
  * - category: grupo del menú de materiales (null: no aparece).
+ * - hardness: resistencia, en segundos que hay que mantener el clic para
+ *   romperlo (si no se indica, según el material: ver HARDNESS_BY_SOUND).
  */
 const DEFAULTS = {
   solid: true,
@@ -96,9 +98,17 @@ const DEFAULTS = {
   category: null,
 };
 
+/**
+ * Resistencia según el material (segundos para romperlo): lo blando sale
+ * enseguida y la piedra tarda. Cada bloque puede tener la suya.
+ */
+const HARDNESS_BY_SOUND = { leaves: 0.15, glass: 0.25, grass: 0.35, sand: 0.35, dirt: 0.4, wood: 0.6, stone: 1 };
+
 function def(id, name, tiles, props = {}) {
   const t = typeof tiles === 'string' ? { top: tiles, side: tiles, bottom: tiles } : tiles;
-  return Object.freeze({ id, name, tiles: Object.freeze(t), item: id, ...DEFAULTS, ...props });
+  const block = { id, name, tiles: Object.freeze(t), item: id, ...DEFAULTS, ...props };
+  block.hardness ??= HARDNESS_BY_SOUND[block.sound] ?? 1;
+  return Object.freeze(block);
 }
 
 /** Tabla de bloques indexada por ID. */
@@ -140,7 +150,7 @@ register(
   }),
 );
 register(
-  def(BLOCK.LOG, 'Tronco', { top: 'log_top', side: 'log_side', bottom: 'log_top' }, { sound: 'wood', category: 'wood' }),
+  def(BLOCK.LOG, 'Tronco', { top: 'log_top', side: 'log_side', bottom: 'log_top' }, { sound: 'wood', category: 'wood', hardness: 0.8 }),
 );
 register(
   def(BLOCK.LEAVES, 'Follaje', 'leaves', {
@@ -151,11 +161,11 @@ register(
     category: 'natural',
   }),
 );
-register(def(BLOCK.ORE_COPPER, 'Mineral de cobrizo', 'ore_copper', { category: 'natural' }));
-register(def(BLOCK.ORE_AZURITE, 'Mineral de azurita', 'ore_azurite', { category: 'natural' }));
-register(def(BLOCK.ORE_SOLARITE, 'Mineral de solarita', 'ore_solarite', { category: 'natural' }));
+register(def(BLOCK.ORE_COPPER, 'Mineral de cobrizo', 'ore_copper', { category: 'natural', hardness: 1.3 }));
+register(def(BLOCK.ORE_AZURITE, 'Mineral de azurita', 'ore_azurite', { category: 'natural', hardness: 1.5 }));
+register(def(BLOCK.ORE_SOLARITE, 'Mineral de solarita', 'ore_solarite', { category: 'natural', hardness: 1.8 }));
 register(def(BLOCK.PLANKS, 'Tablones', 'planks', { sound: 'wood', category: 'wood' }));
-register(def(BLOCK.STONE_BRICK, 'Ladrillo de piedra', 'stone_brick', { category: 'stone' }));
+register(def(BLOCK.STONE_BRICK, 'Ladrillo de piedra', 'stone_brick', { category: 'stone', hardness: 1.2 }));
 register(
   def(BLOCK.GLASS, 'Vidrio', 'glass', {
     opaque: false,
@@ -216,9 +226,9 @@ function rotateBox([x0, y0, z0, x1, y1, z1], facing) {
  * losas (abajo y arriba). En el menú aparecen el escalón al norte y la losa
  * de abajo.
  */
-function addShapes(key, name, tiles, sound) {
+function addShapes(key, name, tiles, { sound, hardness }) {
   const lower = name.charAt(0).toLowerCase() + name.slice(1);
-  const props = { sound, opaque: false };
+  const props = { sound, hardness, opaque: false };
   const stairs = [];
   for (let facing = 0; facing < 4; facing++) {
     // Mirando al norte (-Z): el medio bloque de arriba va del lado norte.
@@ -260,7 +270,7 @@ function addShapes(key, name, tiles, sound) {
 /** Un material nuevo (cubo) con sus escalones y losas. */
 function addMaterial(key, name, tiles, props) {
   const cube = add(key, name, tiles, props);
-  addShapes(key, name, tiles, BLOCKS[cube].sound);
+  addShapes(key, name, tiles, BLOCKS[cube]);
   return cube;
 }
 
@@ -286,6 +296,7 @@ function addDoor(key, name, tileTop, tileBottom, props) {
           opaque: false,
           layer: LAYER.CUTOUT,
           sound: 'wood',
+          hardness: 0.5,
           shape: SHAPE.DOOR,
           boxes: Object.freeze([rotateBox(open ? openBox : closedBox, facing)]),
           facing,
@@ -309,22 +320,22 @@ function addDoor(key, name, tileTop, tileBottom, props) {
 }
 
 // Madera.
-addMaterial('PLANKS_DARK', 'Tablones oscuros', 'planks_dark', { sound: 'wood', category: 'wood' });
-add('PLANKS_LIGHT', 'Tablones claros', 'planks_light', { sound: 'wood', category: 'wood' });
+addMaterial('PLANKS_DARK', 'Tablones oscuros', 'planks_dark', { sound: 'wood', category: 'wood', hardness: 0.7 });
+add('PLANKS_LIGHT', 'Tablones claros', 'planks_light', { sound: 'wood', category: 'wood', hardness: 0.55 });
 add('PLANKS_RED', 'Tablones rojizos', 'planks_red', { sound: 'wood', category: 'wood' });
 add('PARQUET', 'Parqué', 'parquet', { sound: 'wood', category: 'wood' });
 // Piedra y ladrillo.
 addMaterial('COBBLE', 'Empedrado', 'cobble', { category: 'stone' });
-add('SMOOTH_STONE', 'Piedra lisa', 'smooth_stone', { category: 'stone' });
+add('SMOOTH_STONE', 'Piedra lisa', 'smooth_stone', { category: 'stone', hardness: 1.1 });
 addMaterial('BRICKS', 'Ladrillos', 'bricks', { category: 'stone' });
-addMaterial('MARBLE', 'Mármol', 'marble', { category: 'stone' });
+addMaterial('MARBLE', 'Mármol', 'marble', { category: 'stone', hardness: 1.4 });
 addMaterial(
   'SANDSTONE',
   'Arenisca',
   { top: 'sandstone_top', side: 'sandstone_side', bottom: 'sandstone_top' },
-  { sound: 'sand', category: 'stone' },
+  { sound: 'sand', category: 'stone', hardness: 0.8 },
 );
-add('FLOOR_TILES', 'Baldosas', 'floor_tiles', { category: 'stone' });
+add('FLOOR_TILES', 'Baldosas', 'floor_tiles', { category: 'stone', hardness: 0.9 });
 // Revoque de colores.
 for (const [key, name] of [
   ['WHITE', 'blanco'],
@@ -340,22 +351,22 @@ for (const [key, name] of [
   ['PURPLE', 'violeta'],
   ['PINK', 'rosa'],
 ]) {
-  add(`PLASTER_${key}`, `Revoque ${name}`, `plaster_${key.toLowerCase()}`, { category: 'color' });
+  add(`PLASTER_${key}`, `Revoque ${name}`, `plaster_${key.toLowerCase()}`, { category: 'color', hardness: 0.7 });
 }
 // Techos.
-addMaterial('ROOF_RED', 'Tejas rojas', 'roof_red', { category: 'roof' });
-addMaterial('ROOF_GRAY', 'Tejas grises', 'roof_gray', { category: 'roof' });
-add('THATCH', 'Paja', { top: 'thatch_top', side: 'thatch_side', bottom: 'thatch_top' }, { sound: 'grass', category: 'roof' });
+addMaterial('ROOF_RED', 'Tejas rojas', 'roof_red', { category: 'roof', hardness: 0.8 });
+addMaterial('ROOF_GRAY', 'Tejas grises', 'roof_gray', { category: 'roof', hardness: 0.9 });
+add('THATCH', 'Paja', { top: 'thatch_top', side: 'thatch_side', bottom: 'thatch_top' }, { sound: 'grass', category: 'roof', hardness: 0.3 });
 // Puertas, ventanas y detalles.
 addDoor('DOOR_WOOD', 'Puerta de madera', 'door_wood_top', 'door_wood_bottom', { edge: 'planks' });
 addDoor('DOOR_DARK', 'Puerta oscura', 'door_dark_top', 'door_dark_bottom', { edge: 'planks_dark' });
 add('WINDOW', 'Ventana', 'window', { opaque: false, layer: LAYER.CUTOUT, sound: 'glass', category: 'details' });
-add('LAMP', 'Farol', 'lamp', { layer: LAYER.GLOW, sound: 'glass', category: 'details' });
-add('BOOKSHELF', 'Biblioteca', { top: 'planks', side: 'bookshelf', bottom: 'planks' }, { sound: 'wood', category: 'details' });
+add('LAMP', 'Farol', 'lamp', { layer: LAYER.GLOW, sound: 'glass', category: 'details', hardness: 0.35 });
+add('BOOKSHELF', 'Biblioteca', { top: 'planks', side: 'bookshelf', bottom: 'planks' }, { sound: 'wood', category: 'details', hardness: 0.5 });
 // Los escalones y losas de los materiales de siempre.
 for (const key of ['PLANKS', 'STONE_BRICK']) {
   const b = BLOCKS[BLOCK[key]];
-  addShapes(key, b.name, b.tiles, b.sound);
+  addShapes(key, b.name, b.tiles, b);
 }
 
 Object.freeze(BLOCK);

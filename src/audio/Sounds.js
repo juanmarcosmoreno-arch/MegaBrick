@@ -31,6 +31,7 @@ const ACTIONS = {
   step: { gain: 0.32, decay: 1, pitch: 1 },
   land: { gain: 0.6, decay: 1.4, pitch: 0.8 },
   break: { gain: 0.9, decay: 1.8, pitch: 1 },
+  hit: { gain: 0.4, decay: 0.7, pitch: 1.25 }, // golpecito mientras se rompe
   place: { gain: 0.75, decay: 1.1, pitch: 0.75 },
   splash: { gain: 0.8, decay: 2.2, pitch: 1 },
 };
@@ -75,7 +76,7 @@ export class Sounds {
 
   /**
    * Hace sonar una acción sobre un bloque.
-   * @param {'step' | 'land' | 'break' | 'place' | 'splash'} action
+   * @param {'step' | 'land' | 'break' | 'hit' | 'place' | 'splash'} action
    * @param {number} blockId bloque (define el material)
    * @param {number} [loudness] 0 a 1 (por ejemplo, según la distancia)
    */

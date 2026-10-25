@@ -1,7 +1,8 @@
 // Sonidos del juego, generados con Web Audio (sin archivos de audio): pasos,
-// romper y poner bloques, caer y meterse al agua. Cada material suena
-// distinto (pasto, tierra, piedra, madera, arena, hojas, vidrio y agua) y
-// cada vez con una pequeña variación, para que no suene repetido.
+// romper y poner bloques, caer y meterse al agua, y las voces de los
+// animales. Cada material suena distinto (pasto, tierra, piedra, madera,
+// arena, hojas, vidrio y agua) y cada vez con una pequeña variación, para
+// que no suene repetido.
 //
 // Los navegadores no dejan sonar nada hasta que el jugador toca algo: el
 // audio arranca con el primer clic o tecla (unlock).
@@ -126,7 +127,84 @@ export class Sounds {
       osc.stop(t + decay + 0.05);
     }
   }
+
+  /**
+   * La voz de un animal.
+   * @param {string} species id de la especie
+   * @param {'call' | 'happy' | 'scared'} mood
+   * @param {number} [loudness] 0 a 1 (según la distancia)
+   */
+  call(species, mood, loudness = 1) {
+    const ctx = this.ctx;
+    const notes = VOICES[species]?.[mood];
+    if (!ctx || ctx.state !== 'running' || this.volume <= 0 || loudness <= 0 || !notes) return;
+    const start = ctx.currentTime;
+    // Cada animal un poco más agudo o más grave.
+    const pitch = 0.9 + Math.random() * 0.2;
+    for (const n of notes) {
+      const t = start + n.at;
+      const osc = ctx.createOscillator();
+      osc.type = n.type;
+      osc.frequency.setValueAtTime(n.f0 * pitch, t);
+      osc.frequency.exponentialRampToValueAtTime(n.f1 * pitch, t + n.dur);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(n.gain * loudness, t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + n.dur);
+      let last = osc;
+      if (n.vibrato) {
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = n.vibrato;
+        const depth = ctx.createGain();
+        depth.gain.value = n.f0 * pitch * 0.04;
+        lfo.connect(depth).connect(osc.frequency);
+        lfo.start(t);
+        lfo.stop(t + n.dur + 0.02);
+      }
+      if (n.lowpass) {
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = n.lowpass;
+        last = last.connect(filter);
+      }
+      last.connect(gain).connect(this.master);
+      osc.start(t);
+      osc.stop(t + n.dur + 0.02);
+    }
+  }
 }
+
+/**
+ * Voces de los animales: notas cortas con forma de onda, frecuencia de
+ * inicio y fin, momento (at) y duración en segundos, volumen y vibrato (Hz).
+ * Hay una receta por especie para su llamado de siempre, contento y asustado.
+ */
+const VOICES = {
+  carpincho: {
+    // Silbiditos y chasquidos suaves.
+    call: [{ type: 'sine', f0: 820, f1: 1100, at: 0, dur: 0.09, gain: 0.25 }, { type: 'sine', f0: 860, f1: 1150, at: 0.16, dur: 0.08, gain: 0.2 }],
+    happy: [{ type: 'triangle', f0: 130, f1: 120, at: 0, dur: 0.6, gain: 0.35, vibrato: 18 }],
+    scared: [{ type: 'square', f0: 420, f1: 260, at: 0, dur: 0.1, gain: 0.25 }],
+  },
+  oveja: {
+    // "Beee" con vibrato.
+    call: [{ type: 'sawtooth', f0: 300, f1: 280, at: 0, dur: 0.55, gain: 0.18, vibrato: 7, lowpass: 1400 }],
+    happy: [{ type: 'sawtooth', f0: 380, f1: 420, at: 0, dur: 0.3, gain: 0.16, vibrato: 8, lowpass: 1600 }],
+    scared: [{ type: 'sawtooth', f0: 420, f1: 330, at: 0, dur: 0.22, gain: 0.2, vibrato: 11, lowpass: 1800 }],
+  },
+  gallina: {
+    // Cacareo: golpecitos cortos.
+    call: [0, 0.13, 0.24].map((at, i) => ({ type: 'square', f0: 520 + i * 40, f1: 420, at, dur: 0.06, gain: 0.12, lowpass: 2200 })),
+    happy: [0, 0.1, 0.2, 0.34].map((at, i) => ({ type: 'square', f0: 480 + i * 70, f1: 560 + i * 70, at, dur: 0.07, gain: 0.12, lowpass: 2400 })),
+    scared: [0, 0.06, 0.12, 0.18, 0.24].map((at) => ({ type: 'sawtooth', f0: 900, f1: 600, at, dur: 0.05, gain: 0.12, lowpass: 3000 })),
+  },
+  conejo: {
+    // Muy callado: chillidito y golpe con la pata.
+    call: [{ type: 'sine', f0: 1700, f1: 2100, at: 0, dur: 0.06, gain: 0.12 }],
+    happy: [{ type: 'sine', f0: 1500, f1: 2300, at: 0, dur: 0.08, gain: 0.12 }, { type: 'sine', f0: 1600, f1: 2400, at: 0.12, dur: 0.08, gain: 0.1 }],
+    scared: [{ type: 'sine', f0: 140, f1: 60, at: 0, dur: 0.12, gain: 0.5 }],
+  },
+};
 
 /** Bloques caminados entre paso y paso. */
 const STRIDE = 1.9;

@@ -33,6 +33,7 @@ import { WorldSaves } from './save/WorldSaves.js';
 import { WorldsMenu } from './ui/WorldsMenu.js';
 import { OptionsMenu, loadOptions } from './ui/OptionsMenu.js';
 import { Footsteps, HEARING_DISTANCE, Sounds } from './audio/Sounds.js';
+import { Animals } from './animals/Animals.js';
 
 // Paso de tiempo máximo por frame: si el navegador se traba, el juego no
 // "salta" de golpe.
@@ -176,7 +177,10 @@ class Game {
       onClose: (resume) => this.closeInventory(resume),
     });
 
-    // --- Romper y poner bloques ---
+    // --- Animales ---
+    this.animals = new Animals({ scene: this.scene, sounds: this.sounds });
+
+    // --- Romper y poner bloques (y acariciar o empujar animales) ---
     this.outline = new BlockOutline(this.scene);
     this.interaction = new BlockInteraction({
       world: this.world,
@@ -189,6 +193,8 @@ class Game {
         this.multiplayer.countAction();
         this.sounds.play(action, id);
       },
+      animals: this.animals,
+      onAnimal: (act, animal) => this.actOnAnimal(act, animal),
     });
     this.menu = new Menu({
       onPlay: () => this.controls.lock(),
@@ -339,6 +345,7 @@ class Game {
     if (hotbar) this.hotbar.setSlots(hotbar.slots, hotbar.selected);
     this.saves.setCurrent(save);
     this.world.preload(s.x, s.z, 1);
+    this.animals.reset();
   }
 
   /** Un mundo leído del guardado (WorldSaves.load) pasa a ser el actual. */
@@ -531,6 +538,39 @@ class Game {
     const pad = this.controls.pad;
     const padSteps = (pad.wasPressed(PAD.RB) ? 1 : 0) - (pad.wasPressed(PAD.LB) ? 1 : 0);
     this.hotbar.scroll(this.controls.consumeWheel() + padSteps);
+  }
+
+  /**
+   * Acariciar o empujar un animal. Un invitado se lo pide al anfitrión (que
+   * es quien mueve los animales de la partida).
+   */
+  actOnAnimal(act, animal) {
+    this.heldItem.swing();
+    this.avatar.swing();
+    this.multiplayer.countAction();
+    if (this.multiplayer.role === 'guest') {
+      this.multiplayer.sendAnimalAct(animal.id, act);
+      return;
+    }
+    const p = this.player.position;
+    this.animals.act(animal.id, act, { id: this.multiplayer.selfId, x: p.x, y: p.y, z: p.z }, p);
+  }
+
+  /**
+   * Jugadores alrededor de los que hay animales (el primero, este): para que
+   * aparezcan cerca, miren y sigan a quien los acarició. El anfitrión también
+   * los hace aparecer cerca de los invitados.
+   */
+  animalPlayers() {
+    const p = this.player.position;
+    const list = [{ id: this.multiplayer.selfId, x: p.x, y: p.y, z: p.z, yaw: this.player.yaw }];
+    if (this.multiplayer.role === 'host') {
+      for (const [id, remote] of this.multiplayer.players) {
+        const s = remote.lastState;
+        if (s) list.push({ id, x: s.x, y: s.y, z: s.z });
+      }
+    }
+    return list;
   }
 
   /** Abre el menú de materiales (tecla E o Vista del joystick). */
@@ -739,6 +779,7 @@ class Game {
         ? `Workers: ${this.chunkWorkers.workers.length}  ·  ${working} trabajando, ${waiting} mallas por sumar`
         : 'Workers: no (el mundo se arma en el hilo principal)',
       `Frame: ${this.frameTimes.ms.toFixed(1)} ms promedio, el más lento ${this.frameTimes.worst.toFixed(1)} ms`,
+      `Animales: ${this.animals.count}${this.multiplayer.role === 'guest' ? ' (los mueve el anfitrión)' : ''}`,
     ]);
   }
 
@@ -793,6 +834,15 @@ class Game {
     if (this.multiplayer.active) this.sky.advance(realDt);
     else if (this.state === STATE.PLAYING) this.sky.advance(dt);
     this.multiplayer.update(dt);
+    // Los animales se mueven jugando (o siempre, con una partida).
+    if (this.inGame || this.multiplayer.active) {
+      this.animals.update(dt, {
+        world: this.world,
+        players: this.animalPlayers(),
+        simulate: this.state === STATE.PLAYING || this.multiplayer.active,
+        camera: this.camera,
+      });
+    }
 
     if (this.state === STATE.TITLE) {
       // Fondo negro como el del logo y el personaje en su recuadro.

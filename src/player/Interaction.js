@@ -5,6 +5,9 @@
 // Los escalones y las puertas se ponen mirando hacia donde mira el jugador;
 // una losa va arriba si se apunta a la mitad de arriba de una cara (o a un
 // techo). Clic derecho sobre una puerta la abre o la cierra.
+//
+// Si se apunta a un animal (más cerca que el bloque de atrás), clic derecho
+// lo acaricia y clic izquierdo lo empuja.
 
 import * as THREE from 'three';
 import { BLOCK, COLLISION_BOXES, SHAPE, getBlock } from '../world/blocks.js';
@@ -39,14 +42,19 @@ export class BlockInteraction {
    * @param {import('../ui/Hotbar.js').Hotbar} o.hotbar
    * @param {import('../render/BlockOutline.js').BlockOutline} o.outline
    * @param {(action: 'break' | 'place', id: number) => void} [o.onAction]
+   * @param {import('../animals/Animals.js').Animals} [o.animals]
+   * @param {(act: 'pet' | 'poke', animal: object) => void} [o.onAnimal]
    */
-  constructor({ world, player, hotbar, outline, onAction }) {
+  constructor({ world, player, hotbar, outline, onAction, animals, onAnimal }) {
     this.world = world;
     this.player = player;
     this.hotbar = hotbar;
     this.outline = outline;
     this.onAction = onAction;
+    this.animals = animals;
+    this.onAnimal = onAnimal;
     this.target = null; // bloque apuntado (o null)
+    this.animalTarget = null; // animal apuntado (o null)
     this._breakTimer = 0;
     this._placeTimer = 0;
     this._breaking = false;
@@ -72,11 +80,23 @@ export class BlockInteraction {
       -Math.cos(p.yaw) * Math.cos(p.pitch),
     );
     this.target = raycast(this.world, this._eye, this._dir, REACH, isTarget);
-
-    // Al apretar actúa enseguida; si se mantiene, repite cada REPEAT segundos.
     this._breakTimer -= dt;
     this._placeTimer -= dt;
     const pad = controls.pad;
+
+    // Un animal más cerca que el bloque: se lo acaricia o se lo empuja (un
+    // toque por clic, sin repetir manteniendo el botón).
+    const hit = this.animals?.raycast(this._eye, this._dir, REACH);
+    this.animalTarget = hit && (!this.target || hit.distance < this.target.distance) ? hit.animal : null;
+    if (this.animalTarget) {
+      this._breaking = false;
+      this.outline.show(null);
+      if (controls.wasClicked(2) || pad.wasPressed(PAD.LT)) this.onAnimal?.('pet', this.animalTarget);
+      else if (controls.wasClicked(0) || pad.wasPressed(PAD.RT)) this.onAnimal?.('poke', this.animalTarget);
+      return;
+    }
+
+    // Al apretar actúa enseguida; si se mantiene, repite cada REPEAT segundos.
     this._breaking = controls.isMouseDown(0) || pad.isDown(PAD.RT);
     const placing = controls.isMouseDown(2) || pad.isDown(PAD.LT);
     let changed = false;

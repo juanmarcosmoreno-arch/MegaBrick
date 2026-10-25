@@ -7,9 +7,11 @@
 import { BLOCK, BLOCKS } from '../world/blocks.js';
 import { CHUNK_HEIGHT } from '../world/Chunk.js';
 import { DEFAULT_VARIANT, EXPRESSIONS, isVariant } from '../player/colors.js';
+import { ACTIONS } from '../animals/Animal.js';
+import { SPECIES_IDS } from '../animals/species/index.js';
 
 /** Versión del protocolo: invitado y anfitrión tienen que coincidir. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Prefijo de los IDs en el servidor de PeerJS (evita choques con otras apps). */
 const PEER_PREFIX = 'megabrick-v1-';
@@ -34,7 +36,12 @@ export const MSG = Object.freeze({
   JOIN: 'join', // anfitrión → todos: entró alguien
   LEAVE: 'leave', // anfitrión → todos: se fue alguien
   TIME: 'time', // anfitrión → todos: hora del día (todos ven el mismo cielo)
+  ANIMALS: 'animals', // anfitrión → todos: dónde está y qué hace cada animal
+  ANIMAL: 'animal', // invitado → anfitrión: acaricia o empuja un animal
 });
+
+/** Máximo de animales en un mensaje. */
+const MAX_ANIMALS = 64;
 
 /** Código nuevo al azar, por ejemplo "K7QX2M". */
 export function newRoomCode() {
@@ -127,6 +134,33 @@ export function cleanEdit(m) {
   // Bloques que existen; el lecho primordial no se puede poner.
   if (!BLOCKS[id] || id === BLOCK.BEDROCK) return null;
   return { x, y, z, id };
+}
+
+/**
+ * Valida la lista de animales del anfitrión (ver Animals.snapshot): un
+ * array por animal con 11 enteros en rango. Los que no cumplen se descartan.
+ * Devuelve la lista limpia o null.
+ */
+export function cleanAnimals(list) {
+  if (!Array.isArray(list)) return null;
+  const out = [];
+  const ints = (a) => a.every(Number.isInteger);
+  for (const a of list.slice(0, MAX_ANIMALS)) {
+    if (!Array.isArray(a) || a.length !== 11 || !ints(a)) continue;
+    const [id, sp, variant, x, y, z, yaw, action, lookYaw, lookPitch, speed] = a;
+    if (id < 1 || id > 2 ** 31 || sp < 0 || sp >= SPECIES_IDS.length || variant < 0 || variant > 15) continue;
+    if (Math.abs(x) > LIMIT * 100 || Math.abs(z) > LIMIT * 100 || y < 0 || y > CHUNK_HEIGHT * 100) continue;
+    if (Math.abs(yaw) > 700 || action < 0 || action >= ACTIONS.length) continue;
+    if (Math.abs(lookYaw) > 300 || Math.abs(lookPitch) > 300 || speed < 0 || speed > 300) continue;
+    out.push(a);
+  }
+  return out;
+}
+
+/** Valida un pedido de acariciar o empujar un animal. Devuelve {id, act} o null. */
+export function cleanAnimalAct(m) {
+  if (!m || typeof m !== 'object' || !Number.isInteger(m.id) || (m.act !== 'pet' && m.act !== 'poke')) return null;
+  return { id: m.id, act: m.act };
 }
 
 /** Valida la ficha de un jugador (id, nombre y color). */

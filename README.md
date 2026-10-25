@@ -29,6 +29,7 @@ El juego se construye por etapas. Siempre queda una versión jugable.
 | 7 | Rendimiento: Web Workers, cola de chunks priorizada | ✅ |
 | 8 | Joystick (Xbox, PlayStation y otros): jugar y usar los menús | ✅ |
 | 9 | Materiales de construcción: madera, piedra, ladrillo, revoque de colores, tejas, escalones, losas, puertas, ventanas y faroles; menú de materiales | ✅ |
+| 10 | Animales: carpincho, oveja, gallina y conejo (acariciarlos, empujarlos, te siguen), también en el multijugador | ✅ |
 
 ## Requisitos
 
@@ -74,8 +75,8 @@ Ejemplo: `http://localhost:5173/megabrick/?semilla=islas&distancia=8`.
 | **Ctrl** (o doble toque de **W**) | Correr: más rápido y con la vista un poco más abierta |
 | **F** | Activar o desactivar el vuelo |
 | **Espacio / Shift** (volando) | Subir / bajar |
-| **Clic izquierdo** | Romper el bloque apuntado (mantenido, sigue rompiendo) |
-| **Clic derecho** | Poner el bloque elegido en la cara apuntada |
+| **Clic izquierdo** | Romper el bloque apuntado (mantenido, sigue rompiendo). Sobre un animal: empujarlo |
+| **Clic derecho** | Poner el bloque elegido en la cara apuntada. Sobre un animal: acariciarlo |
 | **1 – 9** o **rueda del mouse** | Elegir casilla de la hotbar |
 | **E** | Menú de materiales: elegir qué bloque va en cada casilla (E o Esc lo cierran) |
 | **V** | Cambiar la cámara: primera persona → tercera persona → de frente |
@@ -150,12 +151,13 @@ Podés jugar en el mismo mundo con amigos, cada uno desde su computadora:
 1. Una persona toca **Multijugador → Crear partida** y recibe un código, por ejemplo `K7Q-X2M`. Puede copiarlo y mandarlo por cualquier chat. El botón **Multijugador** está en la pantalla de inicio y también en la pausa: así se puede invitar a alguien a un mundo en el que ya se viene jugando.
 2. Las demás tocan **Multijugador**, escriben el código en **Unirse** y entran a jugar. Reciben el mundo de quien creó la partida: misma semilla y mismos bloques cambiados. Aparecen al lado de quien la creó. Antes de cambiar de mundo, el propio se guarda.
 3. Cada uno ve a los demás con su personaje, su color y su nombre arriba de la cabeza. Arriba a la derecha está la lista de jugadores. En la pausa están el código y el botón para copiarlo.
-4. Lo que rompe o pone cualquiera aparece en las computadoras de todos.
+4. Lo que rompe o pone cualquiera aparece en las computadoras de todos, y todos ven los mismos animales.
 5. **Salir de la partida** (en el panel de Multijugador) corta la conexión y deja seguir jugando solo en el mismo mundo. **Guardar y salir** (en la pausa) también deja la partida y vuelve al inicio; si lo hace quien la creó, la partida se cierra para todos (el juego pregunta antes). Cerrar el panel mientras se está conectando cancela la conexión.
 
 **Cómo funciona.**
 - **Conexión:** las computadoras se conectan directo entre sí con WebRTC. Para el primer contacto, que es intercambiar el código, se usa el servidor público y gratuito de [PeerJS](https://peerjs.com/), así que no hace falta un servidor propio y funciona desde GitHub Pages.
-- **Qué viaja por la red:** el terreno no. Cada computadora lo genera con la semilla, y solo viajan las posiciones, los cambios de bloques y la hora (todos ven el mismo cielo).
+- **Qué viaja por la red:** el terreno no. Cada computadora lo genera con la semilla, y solo viajan las posiciones, los cambios de bloques, la hora (todos ven el mismo cielo) y los animales.
+- **Los animales:** los mueve el anfitrión, también cerca de los invitados, y manda 5 veces por segundo dónde está y qué hace cada uno; los demás los mueven suave hacia ahí. Para acariciar o empujar un animal, el invitado se lo pide al anfitrión, que solo acepta animales cerca de quien los toca y unos pocos por segundo.
 - **El anfitrión:** quien crea la partida ordena los cambios para que todos terminen viendo el mismo mundo. También revisa todo lo que mandan los demás, porque un jugador podría usar una versión modificada del juego. No acepta bloques inválidos, ni romper o poner lecho primordial, ni cambios lejos de donde está el jugador. Aplica como mucho 30 cambios por segundo por jugador (con ráfagas de hasta 60). Los que sobran esperan en fila y, si son demasiados, se rechazan y se le devuelve el bloque real a quien los hizo. Las posiciones de más de 30 por segundo se descartan. Los mensajes viajan en formato MsgPack, que no se puede usar para colgar la pestaña de otro con un mensaje armado a propósito.
 
 **Límites.**
@@ -175,6 +177,17 @@ El mundo es infinito y se genera a medida que te movés, en chunks de 16 × 16 b
 - **Minerales:** cobrizo, azurita y solarita aparecen en vetas dentro de la piedra. Cuanto más raro el mineral, más hondo.
 - **Carga de chunks:** se generan y mallan en segundo plano (ver [Rendimiento](#rendimiento)), primero los más cercanos al jugador y los que tiene adelante. Los lejanos se liberan de la memoria.
 - **Niebla:** tiene el color del horizonte (cambia con la hora) y tapa el borde del área cargada.
+
+## Animales
+
+En el pasto aparecen animales en grupos: **carpinchos** (tranquilos y nadadores; a veces con un benteveo en la cabeza), **ovejas** de lana esponjosa, **gallinas** y **conejos**. Cada especie tiene varias variantes de color.
+
+- **Qué hacen:** pasean, pastan o picotean, se quedan mirando al jugador que está cerca, suben escalones de un bloque saltando, no se tiran de los barrancos y, si caen al agua, flotan y nadan hasta la orilla. Al carpincho le gusta meterse al agua.
+- **Acariciar (clic derecho, o el gatillo izquierdo del joystick):** se pone contento, le salen corazones y te sigue un rato.
+- **Empujar (clic izquierdo, o el gatillo derecho):** da un respingo y sale corriendo para el otro lado. No se lastiman.
+- **Sonidos:** cada especie tiene su voz, hecha con Web Audio como el resto de los sonidos; se escuchan más bajo cuanto más lejos están.
+- **Dónde aparecen:** sobre el césped, a 20–44 bloques del jugador y no justo adelante, hasta 10 cerca de cada jugador. Los que quedan lejos se van. No se guardan con el mundo: cada vez aparecen otros.
+- **F3** muestra cuántos animales hay.
 
 ## Ambiente
 
@@ -221,8 +234,13 @@ src/
     World.js            → chunks alrededor del jugador (carga/descarga, cola de prioridad), get/set de bloques, mallas
     ChunkWorkers.js     → grupo de Web Workers: reparte los trabajos y avisa cuando terminan
     chunkWorker.js      → el worker: genera chunks y arma sus mallas
+    collision.js        → choques de una caja contra los bloques (el jugador y los animales)
     Mesher.js           → una malla por chunk con solo las caras visibles y oclusión por vértice (sin DOM: corre en los workers)
     TerrainGen.js       → terreno procedural con semilla: alturas, capas, agua, árboles y minerales
+  animals/
+    Animals.js          → los animales del mundo: aparecen y se van, los corazones, la red
+    Animal.js           → un animal: su cuerpo (choques, salto, nado) y lo que hace (pasear, pastar, escapar, seguir)
+    species/            → cada especie: su modelo por código (carpincho, oveja, gallina, conejo) y en index.js cómo se comporta
   player/
     Player.js           → posición, orientación, física (colisiones AABB, salto, nado, vuelo)
     Controls.js         → teclado, mouse y pointer lock; jugar con el joystick sin capturar el mouse

@@ -10,7 +10,7 @@
 // A es Espacio, B baja volando y apretar la palanca izquierda corre.
 
 import * as THREE from 'three';
-import { COLLISION_BOXES } from '../world/blocks.js';
+import { moveAxis, overlapsSolid } from '../world/collision.js';
 import { PAD } from './Gamepad.js';
 
 const HALF_PI = Math.PI / 2 - 0.001;
@@ -43,7 +43,6 @@ const ACCEL_FLY = 10;
 const DOUBLE_TAP = 0.3;
 /** Paso máximo de movimiento por sub-paso: evita atravesar bloques. */
 const MAX_STEP = 0.4;
-const EPS = 1e-6;
 /** Lo más alto que se sube caminando, sin saltar (un escalón o una losa). */
 const STEP_HEIGHT = 0.5 + 1e-3;
 /** Qué tan rápido la cámara alcanza la altura nueva al subir un escalón. */
@@ -298,67 +297,14 @@ export class Player {
     v.z = hitZ ? 0 : vz;
   }
 
-  /**
-   * Mueve sobre un eje (0 = X, 1 = Y, 2 = Z). Si la caja queda dentro de
-   * algo sólido (un bloque o la caja de una losa, un escalón o una puerta),
-   * la pega a esa cara y devuelve true.
-   */
+  /** Mueve sobre un eje (0 = X, 1 = Y, 2 = Z); true si chocó (ver collision.js). */
   _moveAxis(world, axis, d) {
-    const p = this.position;
-    p.setComponent(axis, p.getComponent(axis) + d);
-    const half = this.width / 2;
-    const lo = [p.x - half, p.y, p.z - half];
-    const hi = [p.x + half, p.y + this.height, p.z + half];
-
-    // Como cada sub-paso avanza menos de un bloque, lo que ahora se pisa
-    // está en la capa del frente del movimiento: se frena en la cara más
-    // cercana de todo lo que se superpone.
-    let hit = false;
-    let limit = d > 0 ? Infinity : -Infinity;
-    const cell = [0, 0, 0];
-    for (let by = Math.floor(lo[1] + EPS); by <= Math.floor(hi[1] - EPS); by++) {
-      for (let bz = Math.floor(lo[2] + EPS); bz <= Math.floor(hi[2] - EPS); bz++) {
-        for (let bx = Math.floor(lo[0] + EPS); bx <= Math.floor(hi[0] - EPS); bx++) {
-          const boxes = COLLISION_BOXES[world.getBlock(bx, by, bz)];
-          if (!boxes) continue;
-          cell[0] = bx;
-          cell[1] = by;
-          cell[2] = bz;
-          for (const b of boxes) {
-            if (!overlaps(cell, b, lo, hi)) continue;
-            hit = true;
-            limit = d > 0 ? Math.min(limit, cell[axis] + b[axis]) : Math.max(limit, cell[axis] + b[axis + 3]);
-          }
-        }
-      }
-    }
-    if (!hit) return false;
-    if (axis === 0) p.x = d > 0 ? limit - half : limit + half;
-    else if (axis === 1) p.y = d > 0 ? limit - this.height : limit;
-    else p.z = d > 0 ? limit - half : limit + half;
-    return true;
+    return moveAxis(world, this.position, this.width / 2, this.height, axis, d);
   }
 
   /** ¿La caja del jugador se superpone con algo sólido? */
   _overlapsSolid(world) {
-    const p = this.position;
-    const half = this.width / 2;
-    const lo = [p.x - half, p.y, p.z - half];
-    const hi = [p.x + half, p.y + this.height, p.z + half];
-    const cell = [0, 0, 0];
-    for (let by = Math.floor(lo[1] + EPS); by <= Math.floor(hi[1] - EPS); by++) {
-      for (let bz = Math.floor(lo[2] + EPS); bz <= Math.floor(hi[2] - EPS); bz++) {
-        for (let bx = Math.floor(lo[0] + EPS); bx <= Math.floor(hi[0] - EPS); bx++) {
-          const boxes = COLLISION_BOXES[world.getBlock(bx, by, bz)];
-          if (!boxes) continue;
-          cell[0] = bx;
-          cell[1] = by;
-          cell[2] = bz;
-          if (boxes.some((b) => overlaps(cell, b, lo, hi))) return true;
-        }
-      }
-    }
-    return false;
+    return overlapsSolid(world, this.position, this.width / 2, this.height);
   }
 
   /**
@@ -381,16 +327,5 @@ export class Player {
   getEyePosition(out) {
     return out.set(this.position.x, this.position.y + this.eyeHeight + this._eyeLag, this.position.z);
   }
-}
-
-/**
- * ¿La caja `b` del bloque en `cell` se superpone con la del jugador (lo,
- * hi)? Tocarse justo en una cara no cuenta.
- */
-function overlaps(cell, b, lo, hi) {
-  for (let a = 0; a < 3; a++) {
-    if (cell[a] + b[a] >= hi[a] - EPS || cell[a] + b[a + 3] <= lo[a] + EPS) return false;
-  }
-  return true;
 }
 

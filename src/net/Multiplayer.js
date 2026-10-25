@@ -12,12 +12,16 @@
 //   aunque dos jugadores cambien el mismo bloque a la vez.
 // - El anfitrión le pone a cada invitado un id corto ('j1', 'j2'...): los
 //   ids de la red de cada computadora no se pasan a los demás.
+// - Los animales los simula el anfitrión y manda dónde están 5 veces por
+//   segundo; los invitados le piden acariciarlos o empujarlos.
 
 import { Session, describeError } from './Session.js';
 import {
   MAX_PLAYERS,
   MSG,
   PROTOCOL_VERSION,
+  cleanAnimalAct,
+  cleanAnimals,
   cleanEdit,
   cleanPlayerInfo,
   cleanPosition,
@@ -51,6 +55,11 @@ const MAX_EDITED_CHUNKS = 20000;
 const HOST_ID = 'h';
 /** Cada cuántos segundos el anfitrión manda la hora del día. */
 const TIME_SYNC_INTERVAL = 5;
+/** Cada cuánto manda el anfitrión los animales (segundos). */
+const ANIMALS_INTERVAL = 0.2;
+/** Acariciar o empujar animales: por segundo y de una vez, por invitado. */
+const ANIMAL_ACT_RATE = 4;
+const ANIMAL_ACT_BURST = 6;
 /** Tiempo máximo de espera (ms) del "welcome" (invitado) y del "hello" (anfitrión). */
 const WELCOME_TIMEOUT = 15000;
 const HELLO_TIMEOUT = 10000;
@@ -86,6 +95,8 @@ export class Multiplayer {
     this.onNotice = null;
     this._sendTimer = 0;
     this._timeSync = 0;
+    this._animalsTimer = 0;
+    this._animalBudget = new Map(); // fichas por invitado (acariciar o empujar)
     this._swing = 0;
     this._pending = null; // conexión en curso (crear o unirse)
     this._pendingWelcome = null;
@@ -118,6 +129,16 @@ export class Multiplayer {
   /** Contar una acción (romper/poner) para animar el brazo en las otras computadoras. */
   countAction() {
     this._swing++;
+  }
+
+  /** Id de este jugador para los animales (a quién siguen): el anfitrión o el que juega solo. */
+  get selfId() {
+    return this.role === 'host' ? HOST_ID : 'yo';
+  }
+
+  /** Invitado: pedirle al anfitrión acariciar o empujar un animal. */
+  sendAnimalAct(id, act) {
+    if (this.role === 'guest') this._sendToHost({ t: MSG.ANIMAL, id, act });
   }
 
   // -------------------------------------------------------------------------
@@ -213,6 +234,8 @@ export class Multiplayer {
     this.role = null;
     this.code = null;
     this._byPeer.clear();
+    // Los animales del anfitrión se van: ahora aparecen los propios.
+    if (wasGuest) this.game.animals.reset({ remote: false });
     if (wasGuest && adopt) this.game.saves.adopt();
     else if (wasHost) this.game.saves.saveIfWorthIt();
     this.onChange?.();
@@ -260,6 +283,11 @@ export class Multiplayer {
       if (this._timeSync <= 0) {
         this._timeSync = TIME_SYNC_INTERVAL;
         this._broadcast({ t: MSG.TIME, time: this.game.sky.time });
+      }
+      this._animalsTimer -= dt;
+      if (this._animalsTimer <= 0 && this.players.size > 0) {
+        this._animalsTimer = ANIMALS_INTERVAL;
+        this._broadcast({ t: MSG.ANIMALS, a: this.game.animals.snapshot() });
       }
     }
 
@@ -372,6 +400,14 @@ export class Multiplayer {
       } else {
         this._applyGuestEdit(edit);
       }
+    } else if (msg.t === MSG.ANIMAL) {
+      const act = cleanAnimalAct(msg);
+      const s = player.lastState;
+      if (!act || !s || !this._takeToken(this._animalBudget, id, ANIMAL_ACT_RATE, ANIMAL_ACT_BURST)) return;
+      // Solo a un animal que tenga al alcance.
+      const a = this.game.animals.list.get(act.id);
+      if (!a || Math.hypot(a.position.x - s.x, a.position.y - s.y, a.position.z - s.z) > REACH + 3) return;
+      this.game.animals.act(act.id, act.act, { id, x: s.x, y: s.y, z: s.z }, this.game.player.position);
     }
   }
 
@@ -508,6 +544,11 @@ export class Multiplayer {
       case MSG.TIME:
         if (this.active && Number.isFinite(msg.time)) this.game.sky.setTime(msg.time);
         break;
+      case MSG.ANIMALS: {
+        const list = this.active ? cleanAnimals(msg.a) : null;
+        if (list) this.game.animals.applySnapshot(list, this.game.player.position);
+        break;
+      }
       default:
     }
   }
@@ -538,6 +579,8 @@ export class Multiplayer {
     this.role = 'guest';
     this.code = this._joinCode;
     this.attachWorld(this.game.world);
+    // Los animales ahora son los del anfitrión.
+    this.game.animals.reset({ remote: true });
     if (host) this._addPlayer(host);
     // Como mucho, los que entran en una partida (sin contar al anfitrión ni a uno mismo).
     for (const p of others) {
@@ -602,6 +645,7 @@ export class Multiplayer {
     this._editBudget.delete(id);
     this._editQueue.delete(id);
     this._stateBudget.delete(id);
+    this._animalBudget.delete(id);
     if (!player) return;
     this.players.delete(id);
     player.dispose();

@@ -1,5 +1,5 @@
-// Opciones (desde la pausa): distancia de render, sensibilidad del mouse,
-// campo de visión y volumen. Se aplican al momento y se recuerdan en el
+// Opciones (desde la pausa): distancia de render, sensibilidad (del mouse y
+// de la palanca del joystick), campo de visión y volumen. Se aplican al momento y se recuerdan en el
 // navegador (preferencias).
 
 import { loadPreference, savePreference } from '../save/Preferences.js';

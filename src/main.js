@@ -11,6 +11,7 @@ import { BLOCK, getBlock } from './world/blocks.js';
 import { TerrainGenerator, parseSeed } from './world/TerrainGen.js';
 import { Player } from './player/Player.js';
 import { Controls } from './player/Controls.js';
+import { PAD } from './player/Gamepad.js';
 import { Avatar } from './player/Avatar.js';
 import { VIEW, ViewCamera } from './player/ViewCamera.js';
 import { CharacterPreview } from './render/CharacterPreview.js';
@@ -26,6 +27,7 @@ import { getBlockGeometry } from './render/blockGeometry.js';
 import { BlockInteraction } from './player/Interaction.js';
 import { Multiplayer } from './net/Multiplayer.js';
 import { MultiplayerMenu } from './ui/MultiplayerMenu.js';
+import { PadMenu } from './ui/PadMenu.js';
 import { WorldSaves } from './save/WorldSaves.js';
 import { WorldsMenu } from './ui/WorldsMenu.js';
 import { OptionsMenu, loadOptions } from './ui/OptionsMenu.js';
@@ -62,7 +64,7 @@ function readUrlOptions() {
 /** Estados posibles del juego. */
 const STATE = Object.freeze({
   TITLE: 'title', // pantalla de inicio
-  PLAYING: 'playing', // jugando (mouse capturado)
+  PLAYING: 'playing', // jugando (mouse capturado o con el joystick)
   PAUSED: 'paused', // menú de pausa
 });
 
@@ -195,6 +197,15 @@ class Game {
 
     // --- Opciones ---
     this.optionsMenu = new OptionsMenu(this.prefs, (key, value) => this.applyOption(key, value));
+
+    // --- Menús con el joystick ---
+    this.padMenu = new PadMenu(this.controls.pad, {
+      onBack: () => this.padBack(),
+      onStart: () => this.padStart(),
+    });
+    this._soundHintShown = false;
+    this.padHelp = document.getElementById('pad-help');
+    this.keysHelp = document.getElementById('keys-help');
 
     // --- Mundos guardados ---
     this.saves = new WorldSaves(this);
@@ -499,12 +510,49 @@ class Game {
     this.avatar.setHeldBlock(getBlockGeometry(id), this.materials);
   }
 
-  /** Teclas 1-9 y rueda del mouse: elegir casilla de la hotbar. */
+  /** Teclas 1-9, rueda del mouse y LB/RB del joystick: elegir casilla de la hotbar. */
   updateHotbarInput() {
     for (let i = 0; i < HOTBAR_SIZE; i++) {
       if (this.controls.wasPressed(`Digit${i + 1}`)) this.hotbar.select(i);
     }
-    this.hotbar.scroll(this.controls.consumeWheel());
+    const pad = this.controls.pad;
+    const padSteps = (pad.wasPressed(PAD.RB) ? 1 : 0) - (pad.wasPressed(PAD.LB) ? 1 : 0);
+    this.hotbar.scroll(this.controls.consumeWheel() + padSteps);
+  }
+
+  /** Joystick B en un menú: cierra el panel abierto o, en la pausa, sigue jugando. */
+  padBack() {
+    if (!this.optionsMenu.panel.hidden) this.optionsMenu.close();
+    else if (!this.multiplayerMenu.panel.hidden) this.multiplayerMenu.close();
+    else if (!this.worldsMenu.newPanel.hidden || !this.worldsMenu.listPanel.hidden) this.worldsMenu.closeAll();
+    else if (this.state === STATE.PAUSED) this.controls.lock();
+  }
+
+  /** Joystick Start en un menú: jugar (en el inicio) o seguir jugando (en la pausa). */
+  padStart() {
+    const panelOpen =
+      !this.optionsMenu.panel.hidden ||
+      !this.multiplayerMenu.panel.hidden ||
+      !this.worldsMenu.newPanel.hidden ||
+      !this.worldsMenu.listPanel.hidden;
+    if (panelOpen) this.padBack();
+    else if (this.state === STATE.TITLE) document.getElementById('btn-play').click();
+    else this.controls.lock();
+  }
+
+  /** Se conectó o desconectó el joystick: avisos y ayuda de la pantalla de inicio. */
+  updatePadConnection() {
+    const pad = this.controls.pad;
+    if (!pad.justConnected && !pad.justDisconnected) return;
+    if (pad.justConnected) {
+      const labels = pad.labels;
+      for (const kbd of this.padHelp.querySelectorAll('[data-pad]')) kbd.textContent = labels[kbd.dataset.pad];
+      if (this.state === STATE.PLAYING) this.hud.toast('Joystick conectado', 2);
+    } else if (this.state === STATE.PAUSED) {
+      this.menu.setMessage('Se desconectó el joystick.');
+    }
+    this.padHelp.hidden = !pad.connected;
+    this.keysHelp.hidden = pad.connected;
   }
 
   /** Cambia el color del personaje y lo recuerda para la próxima vez. */
@@ -515,9 +563,17 @@ class Game {
     this.multiplayerMenu?.render(); // el color propio en la lista de jugadores
   }
 
-  /** Cambio de captura del mouse: entra o sale del modo de juego. */
+  /** Cambio de captura del mouse (o del juego con el joystick): entra o sale del modo de juego. */
   onLockChange(locked) {
+    // Con el joystick el mouse queda suelto: se oculta la flecha.
+    document.body.classList.toggle('pad-playing', locked && this.controls.padPlaying);
     if (locked) {
+      if (this.controls.padPlaying && !this._soundHintShown && this.sounds.ctx?.state !== 'running') {
+        // El navegador deja sonar recién después de un clic o una tecla (un
+        // botón del joystick no cuenta).
+        this._soundHintShown = true;
+        this.hud.toast('Para escuchar los sonidos, hacé un clic o tocá una tecla', 4);
+      }
       this.state = STATE.PLAYING;
       this.menu.hideAll();
       this.worldsMenu.closeAll();
@@ -666,6 +722,9 @@ class Game {
     const realDt = this.clock.getDelta();
     const dt = Math.min(realDt, MAX_DT);
     this.measureFrameTimes(realDt);
+    this.controls.poll();
+    this.updatePadConnection();
+    if (this.state !== STATE.PLAYING) this.padMenu.update(dt);
 
     // El mundo se genera alrededor del jugador en todos los estados (así,
     // mientras se ve la pantalla de inicio, ya se va cargando). Primero lo
@@ -686,12 +745,13 @@ class Game {
       this.preview.render(this.renderer, this.stageEl.getBoundingClientRect());
     } else {
       if (this.state === STATE.PLAYING) {
-        if (this.controls.wasPressed('KeyV')) this.hud.toast(this.view.cycle());
-        if (this.controls.wasPressed('KeyF')) {
+        const pad = this.controls.pad;
+        if (this.controls.wasPressed('KeyV') || pad.wasPressed(PAD.X)) this.hud.toast(this.view.cycle());
+        if (this.controls.wasPressed('KeyF') || pad.wasPressed(PAD.Y)) {
           this.player.setFlying(!this.player.flying);
-          this.hud.toast(
-            this.player.flying ? 'Vuelo activado: Espacio sube, Shift baja' : 'Vuelo desactivado',
-          );
+          const { A, B } = pad.labels;
+          const how = this.controls.lastDevice === 'pad' ? `${A} sube, ${B} baja` : 'Espacio sube, Shift baja';
+          this.hud.toast(this.player.flying ? `Vuelo activado: ${how}` : 'Vuelo desactivado');
         }
         if (this.controls.wasPressed('F3')) this.hud.toggleDebug();
         this.player.update(dt, this.controls, this.world);
@@ -699,6 +759,8 @@ class Game {
         this.updateHotbarInput();
         this.interaction.update(dt, this.controls);
         this.updateFov(dt);
+        // Start pausa (con el mouse capturado, también lo suelta).
+        if (pad.wasPressed(PAD.START)) this.controls.unlock();
       }
       // Primero la cámara: decide si hay lugar para mostrar al personaje.
       this.view.update(this.player, this.world);

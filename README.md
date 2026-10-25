@@ -27,6 +27,7 @@ El juego se construye por etapas. Siempre queda una versión jugable.
 | 5 | Guardado en IndexedDB y menú de mundos | ✅ |
 | 6 | Ciclo día/noche, oclusión ambiental, sonidos, opciones | ✅ |
 | 7 | Rendimiento: Web Workers, cola de chunks priorizada | ✅ |
+| 8 | Joystick (Xbox, PlayStation y otros): jugar y usar los menús | ✅ |
 
 ## Requisitos
 
@@ -78,6 +79,27 @@ Ejemplo: `http://localhost:5173/megabrick/?semilla=islas&distancia=8`.
 | **V** | Cambiar la cámara: primera persona → tercera persona → de frente |
 | **F3** | Mostrar u ocultar coordenadas, chunk, hacia dónde se mira, la hora, el tiempo por cuadro y más datos |
 | **Esc** | Soltar el mouse y pausar (en la pausa: Opciones, Multijugador, Guardar y salir) |
+
+### Joystick
+
+También se juega con un joystick de Xbox, de PlayStation o cualquiera que el navegador reconozca con el mapeo estándar. No hace falta instalar nada: se conecta (por cable o Bluetooth), se aprieta un botón con el juego abierto y listo. La pantalla de inicio muestra entonces los botones del joystick (con los nombres de PlayStation si es uno de esos).
+
+| Botón (Xbox / PlayStation) | Acción |
+|---|---|
+| **Palanca izquierda** | Moverse (inclinándola poco, más despacio). Apretarla: correr |
+| **Palanca derecha** | Mirar |
+| **A / ✕** | Saltar, nadar hacia arriba o subir volando |
+| **B / ○** | Bajar volando |
+| **Y / △** | Activar o desactivar el vuelo |
+| **RT / R2** | Romper (mantenido, sigue rompiendo) |
+| **LT / L2** | Poner el bloque elegido |
+| **LB RB / L1 R1** | Elegir casilla de la hotbar |
+| **X / □** | Cambiar la cámara |
+| **Menú / Options** | Pausa (y en el inicio, Jugar) |
+
+En los menús, la cruz (o la palanca izquierda) elige, **A** aprieta y **B** vuelve; en Opciones, izquierda y derecha cambian el valor. Con el joystick no se captura el mouse: si hacés clic, el juego pasa al mouse. La sensibilidad de Opciones vale para el mouse y para la palanca derecha.
+
+Algunas cosas siguen pidiendo el teclado o el mouse: escribir (nombre de un mundo, semilla, nombre y código del multijugador), confirmar algo en un aviso del navegador y hacer sonar el juego la primera vez (el navegador deja sonar recién después de un clic o una tecla; un botón del joystick no cuenta).
 
 ### Física
 
@@ -194,7 +216,8 @@ src/
     TerrainGen.js       → terreno procedural con semilla: alturas, capas, agua, árboles y minerales
   player/
     Player.js           → posición, orientación, física (colisiones AABB, salto, nado, vuelo)
-    Controls.js         → teclado, botones y rueda del mouse, pointer lock
+    Controls.js         → teclado, mouse y pointer lock; jugar con el joystick sin capturar el mouse
+    Gamepad.js          → joystick (Gamepad API): botones, palancas con zona muerta y nombres de los botones
     Raycast.js          → bloque apuntado con DDA
     Interaction.js      → romper y poner bloques
     Avatar.js           → el personaje en el juego: gira con la mirada, lleva el bloque en la pinza
@@ -219,6 +242,7 @@ src/
     MultiplayerMenu.js  → panel de multijugador, lista de jugadores y datos en la pausa
     WorldsMenu.js       → Continuar/Jugar, nuevo mundo, lista de mundos (jugar y borrar) y estado del guardado
     OptionsMenu.js      → opciones: distancia de render, sensibilidad, campo de visión y volumen
+    PadMenu.js          → menús con el joystick: mover el foco con la cruz, A aprieta, B vuelve
   audio/
     Sounds.js           → sonidos con Web Audio (pasos, romper, poner, agua) y pasos del jugador
   net/

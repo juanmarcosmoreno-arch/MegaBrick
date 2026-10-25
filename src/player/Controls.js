@@ -1,7 +1,21 @@
-// Entrada del jugador: teclado, mouse y pointer lock.
+// Entrada del jugador: teclado, mouse y pointer lock, y joystick.
 //
 // Se usan los códigos físicos de tecla (event.code: "KeyW", "Space", etc.)
 // para que WASD funcione igual en cualquier distribución de teclado.
+//
+// Con el mouse se juega con el mouse capturado (pointer lock). Con el
+// joystick no hace falta capturarlo (y el navegador no lo deja pedir desde
+// un botón del joystick): se juega "suelto" hasta pausar con Start o hasta
+// hacer clic, que vuelve al mouse.
+
+import { GamepadInput } from './Gamepad.js';
+
+/** Sensibilidad del mouse al 100% (radianes por píxel). */
+const BASE_SENSITIVITY = 0.0022;
+/** Giro con la palanca derecha a fondo y sensibilidad al 100% (radianes por segundo). */
+const PAD_LOOK_SPEED = 3.4;
+/** Mirar arriba y abajo con la palanca es un poco más lento que girar. */
+const PAD_PITCH_FACTOR = 0.75;
 
 export class Controls {
   /**
@@ -20,9 +34,18 @@ export class Controls {
     this.buttons = new Set(); // botones del mouse apretados (0 izq., 2 der.)
     this.clicked = new Set(); // botones apretados en este frame
     this.locked = false;
-    this.sensitivity = 0.0022; // radianes por píxel de movimiento del mouse
+    this.sensitivity = BASE_SENSITIVITY; // radianes por píxel de movimiento del mouse
+    this.pad = new GamepadInput();
+    /** Jugando con el joystick, sin el mouse capturado. */
+    this.padPlaying = false;
+    /** Con qué se usó el juego por última vez: 'mouse' (o teclado) o 'pad'. */
+    this.lastDevice = 'mouse';
 
-    /** Callback cuando se captura o se suelta el mouse: (locked) => void. */
+    /**
+     * Callback cuando se empieza o se deja de jugar: (active) => void. Con
+     * el mouse, al capturarlo o soltarlo; con el joystick, al entrar a jugar
+     * o pausar.
+     */
     this.onLockChange = null;
     /** Callback cuando falla capturar el mouse (por ejemplo, demasiado rápido tras Esc). */
     this.onLockError = null;
@@ -52,9 +75,21 @@ export class Controls {
     document.addEventListener('contextmenu', this._onContextMenu);
   }
 
-  /** Captura el mouse. Debe llamarse desde un evento del usuario (clic). */
+  /** ¿Se está jugando (mouse capturado o con el joystick)? */
+  get active() {
+    return this.locked || this.padPlaying;
+  }
+
+  /**
+   * Empieza a jugar. Si lo último que se usó fue el joystick, sin capturar
+   * el mouse; si no, lo captura (debe llamarse desde un clic o una tecla).
+   */
   lock() {
     if (this.locked) return;
+    if (this.lastDevice === 'pad' && this.pad.connected) {
+      this._setPadPlaying(true);
+      return;
+    }
     try {
       // En navegadores nuevos devuelve una promesa que puede rechazarse
       // (por ejemplo, si se pide de nuevo justo después de apretar Esc).
@@ -67,9 +102,35 @@ export class Controls {
     }
   }
 
-  /** Suelta el mouse. */
+  /** Suelta el mouse (o deja de jugar con el joystick): pausa. */
   unlock() {
     if (document.pointerLockElement === this.element) document.exitPointerLock();
+    this._setPadPlaying(false);
+  }
+
+  /** Lee el joystick. Se llama al principio de cada frame. */
+  poll() {
+    this.pad.poll();
+    if (this.pad.anyPressed) this.lastDevice = 'pad';
+    // Sin joystick no se puede seguir jugando con él: pausa.
+    if (this.pad.justDisconnected) this._setPadPlaying(false);
+  }
+
+  /**
+   * Cuánto girar en este frame (radianes): el movimiento del mouse y la
+   * palanca derecha del joystick (con curva: inclinándola poco se apunta
+   * con precisión).
+   * @param {number} dt segundos
+   */
+  consumeLook(dt) {
+    const { dx, dy } = this.consumeMouse();
+    const { x, y } = this.pad.look;
+    const tilt = Math.hypot(x, y);
+    const speed = PAD_LOOK_SPEED * (this.sensitivity / BASE_SENSITIVITY) * tilt * dt;
+    return {
+      yaw: dx * this.sensitivity + x * speed,
+      pitch: dy * this.sensitivity - y * speed * PAD_PITCH_FACTOR,
+    };
   }
 
   /** ¿La tecla (event.code) está apretada? */
@@ -131,7 +192,13 @@ export class Controls {
   _onKeyDown(e) {
     // F3 (datos del mundo) abre la búsqueda en algunos navegadores, también en la pausa.
     if (e.code === 'F3') e.preventDefault();
-    if (!this.locked) return;
+    this.lastDevice = 'mouse';
+    // Con el joystick el mouse no está capturado: Esc pausa desde acá.
+    if (e.code === 'Escape' && this.padPlaying) {
+      this._setPadPlaying(false);
+      return;
+    }
+    if (!this.active) return;
     // Evitar que Espacio o las flechas desplacen la página mientras se juega,
     // y que Ctrl (correr) + una tecla dispare atajos del navegador (Ctrl+D
     // marcadores, Ctrl+S guardar, etc.). Ctrl+W no se puede bloquear: el
@@ -152,6 +219,13 @@ export class Controls {
   }
 
   _onMouseDown(e) {
+    this.lastDevice = 'mouse';
+    // Jugando con el joystick, un clic pasa al mouse: lo captura.
+    if (this.padPlaying && !this.locked) {
+      e.preventDefault();
+      this.lock();
+      return;
+    }
     // Solo cuenta con el mouse capturado: el clic que captura el mouse (en
     // "Jugar" o en la pausa) no rompe ni pone bloques.
     if (!this.locked) return;
@@ -173,7 +247,7 @@ export class Controls {
    * avanza una casilla y después se acumulan píxeles hasta otro paso.
    */
   _onWheel(e) {
-    if (!this.locked) return;
+    if (!this.active) return;
     e.preventDefault();
     if (!e.deltaY) return;
     // En píxeles, aunque el navegador informe líneas o páginas.
@@ -195,9 +269,24 @@ export class Controls {
 
   _onLockChange() {
     this.locked = document.pointerLockElement === this.element;
-    if (this.locked) this._lockedAt = performance.now();
-    if (!this.locked) this._releaseAll();
-    this.onLockChange?.(this.locked);
+    if (this.locked) {
+      this._lockedAt = performance.now();
+      this.padPlaying = false; // se pasó al mouse
+    } else {
+      this._releaseAll();
+    }
+    this.pad.ignoreHeld();
+    this.onLockChange?.(this.active);
+  }
+
+  /** Empieza o deja de jugar con el joystick (sin capturar el mouse). */
+  _setPadPlaying(on) {
+    if (this.padPlaying === on || (on && this.locked)) return;
+    this.padPlaying = on;
+    if (!on) this._releaseAll();
+    // El botón que se usó para entrar o pausar no cuenta en el juego.
+    this.pad.ignoreHeld();
+    this.onLockChange?.(this.active);
   }
 
   _onLockError(err) {
@@ -206,8 +295,10 @@ export class Controls {
 
   _onBlur() {
     // Si la ventana pierde el foco, soltar todas las teclas para que el
-    // jugador no siga caminando solo.
+    // jugador no siga caminando solo. Con el joystick, además, pausa (con el
+    // mouse pasa solo: el navegador lo suelta).
     this._releaseAll();
+    this._setPadPlaying(false);
   }
 
   _releaseAll() {

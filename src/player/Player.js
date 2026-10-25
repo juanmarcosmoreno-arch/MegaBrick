@@ -4,8 +4,12 @@
 // contra los bloques sólidos. Hay gravedad y salto; un escalón de un bloque
 // solo se sube saltando. Ctrl (o doble toque de W) corre, F activa el vuelo
 // y en el agua se nada: uno se hunde despacio y sube con Espacio.
+//
+// Con joystick: la palanca izquierda mueve (inclinándola poco, más despacio),
+// A es Espacio, B baja volando y apretar la palanca izquierda corre.
 
 import * as THREE from 'three';
+import { PAD } from './Gamepad.js';
 
 const HALF_PI = Math.PI / 2 - 0.001;
 
@@ -62,6 +66,7 @@ export class Player {
     this._climbTop = 0; // altura máxima (pies) hasta la que se puede trepar desde el agua
     this._lastForwardTap = -1;
     this._doubleTapSprint = false;
+    this._padSprint = false;
     this._time = 0;
     this._wish = new THREE.Vector3();
   }
@@ -90,10 +95,10 @@ export class Player {
   update(dt, controls, world) {
     this._time += dt;
 
-    // --- Mirar con el mouse ---
-    const { dx, dy } = controls.consumeMouse();
-    this.yaw -= dx * controls.sensitivity;
-    this.pitch -= dy * controls.sensitivity;
+    // --- Mirar con el mouse o la palanca derecha ---
+    const look = controls.consumeLook(dt);
+    this.yaw -= look.yaw;
+    this.pitch -= look.pitch;
     this.pitch = Math.max(-HALF_PI, Math.min(HALF_PI, this.pitch));
 
     // Si el chunk donde está todavía no se cargó, quieto (no caer al vacío).
@@ -103,20 +108,25 @@ export class Player {
     }
     this._unstuck(world);
 
-    // --- Entrada ---
-    const forward = (controls.isDown('KeyW') ? 1 : 0) - (controls.isDown('KeyS') ? 1 : 0);
-    const strafe = (controls.isDown('KeyD') ? 1 : 0) - (controls.isDown('KeyA') ? 1 : 0);
-    const jump = controls.isDown('Space');
-    const down = controls.isDown('ShiftLeft') || controls.isDown('ShiftRight');
+    // --- Entrada (teclado y joystick) ---
+    const pad = controls.pad;
+    const keyForward = (controls.isDown('KeyW') ? 1 : 0) - (controls.isDown('KeyS') ? 1 : 0);
+    const keyStrafe = (controls.isDown('KeyD') ? 1 : 0) - (controls.isDown('KeyA') ? 1 : 0);
+    const forward = Math.max(-1, Math.min(1, keyForward + pad.move.y));
+    const strafe = Math.max(-1, Math.min(1, keyStrafe + pad.move.x));
+    const jump = controls.isDown('Space') || pad.isDown(PAD.A);
+    const down = controls.isDown('ShiftLeft') || controls.isDown('ShiftRight') || pad.isDown(PAD.B);
     const ctrl = controls.isDown('ControlLeft') || controls.isDown('ControlRight');
 
-    // Carrera: Ctrl o doble toque de W, solo mientras se avanza.
+    // Carrera: Ctrl, doble toque de W o apretar la palanca izquierda (queda
+    // corriendo hasta dejar de avanzar), solo mientras se avanza.
     if (controls.wasPressed('KeyW')) {
       this._doubleTapSprint = this._time - this._lastForwardTap < DOUBLE_TAP;
       this._lastForwardTap = this._time;
     }
-    if (forward <= 0) this._doubleTapSprint = false;
-    this.sprinting = forward > 0 && (ctrl || this._doubleTapSprint);
+    if (pad.wasPressed(PAD.L3)) this._padSprint = true;
+    if (forward <= 0) this._doubleTapSprint = this._padSprint = false;
+    this.sprinting = forward > 0 && (ctrl || this._doubleTapSprint || this._padSprint);
 
     // --- Agua ---
     const { x, y, z } = this.position;

@@ -42,6 +42,11 @@ body {
   height: 100%;
 }
 
+/* Jugando con el joystick el mouse queda suelto: sin flecha sobre el juego. */
+.pad-playing #game canvas {
+  cursor: none;
+}
+
 /* ---------- HUD ---------- */
 
 #hud {
@@ -268,7 +273,8 @@ body {
   transform: translateY(-2px);
 }
 
-.swatch:focus-visible {
+.swatch:focus-visible,
+.pad-nav .swatch:focus {
   outline: 2px solid var(--lime);
   outline-offset: 2px;
 }
@@ -339,7 +345,8 @@ body {
     0 3px 8px rgba(0, 0, 0, 0.2);
 }
 
-.btn:focus-visible {
+.btn:focus-visible,
+.pad-nav .btn:focus {
   outline: 3px solid var(--cream);
   outline-offset: 3px;
 }
@@ -635,7 +642,8 @@ kbd {
   accent-color: var(--lime);
 }
 
-.range-field input[type='range']:focus-visible {
+.range-field input[type='range']:focus-visible,
+.pad-nav .range-field input[type='range']:focus {
   outline: 2px solid var(--lime);
   outline-offset: 4px;
   border-radius: 4px;

@@ -1,9 +1,11 @@
 // Romper y poner bloques: bloque apuntado (raycast DDA desde los ojos),
-// contorno, clic izquierdo para romper y clic derecho para poner.
+// contorno, clic izquierdo para romper y clic derecho para poner (con
+// joystick, gatillo derecho y gatillo izquierdo).
 
 import * as THREE from 'three';
 import { BLOCK, getBlock } from '../world/blocks.js';
 import { CHUNK_HEIGHT } from '../world/Chunk.js';
+import { PAD } from './Gamepad.js';
 import { raycast } from './Raycast.js';
 
 /** Alcance en bloques. */
@@ -70,13 +72,15 @@ export class BlockInteraction {
     // Al apretar actúa enseguida; si se mantiene, repite cada REPEAT segundos.
     this._breakTimer -= dt;
     this._placeTimer -= dt;
-    this._breaking = controls.isMouseDown(0);
+    const pad = controls.pad;
+    this._breaking = controls.isMouseDown(0) || pad.isDown(PAD.RT);
+    const placing = controls.isMouseDown(2) || pad.isDown(PAD.LT);
     let changed = false;
-    if (controls.wasClicked(0) || (this._breaking && this._breakTimer <= 0)) {
+    if (controls.wasClicked(0) || pad.wasPressed(PAD.RT) || (this._breaking && this._breakTimer <= 0)) {
       this._breakTimer = REPEAT;
       changed = this.breakTarget() || changed;
     }
-    if (controls.wasClicked(2) || (controls.isMouseDown(2) && this._placeTimer <= 0)) {
+    if (controls.wasClicked(2) || pad.wasPressed(PAD.LT) || (placing && this._placeTimer <= 0)) {
       this._placeTimer = REPEAT;
       changed = this.placeAtTarget() || changed;
     }

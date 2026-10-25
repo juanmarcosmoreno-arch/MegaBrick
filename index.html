@@ -35,7 +35,7 @@
           </div>
           <p id="title-msg" class="msg" role="status"></p>
           <p id="device-note" class="note" hidden>Megabrick se juega en PC o Mac, con teclado y mouse.</p>
-          <ul class="controls-help">
+          <ul id="keys-help" class="controls-help">
             <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> moverse</li>
             <li><kbd>Mouse</kbd> mirar</li>
             <li><kbd>Espacio</kbd> saltar / nadar</li>
@@ -47,6 +47,19 @@
             <li><kbd>V</kbd> cámara</li>
             <li><kbd>F3</kbd> coordenadas</li>
             <li><kbd>Esc</kbd> pausa</li>
+          </ul>
+          <!-- Con un joystick conectado (los nombres de los botones cambian si es de PlayStation) -->
+          <ul id="pad-help" class="controls-help" hidden>
+            <li><kbd>Palanca izq.</kbd> moverse (apretala para correr)</li>
+            <li><kbd>Palanca der.</kbd> mirar</li>
+            <li><kbd data-pad="A">A</kbd> saltar / nadar</li>
+            <li><kbd data-pad="Y">Y</kbd> volar (<kbd data-pad="B">B</kbd> baja)</li>
+            <li><kbd data-pad="RT">RT</kbd> romper</li>
+            <li><kbd data-pad="LT">LT</kbd> poner</li>
+            <li><kbd data-pad="LB">LB</kbd><kbd data-pad="RB">RB</kbd> bloque</li>
+            <li><kbd data-pad="X">X</kbd> cámara</li>
+            <li><kbd data-pad="START">Menú</kbd> pausa</li>
+            <li>En los menús: cruz para elegir, <kbd data-pad="A">A</kbd> aceptar, <kbd data-pad="B">B</kbd> volver</li>
           </ul>
         </div>
         <!-- Vitrina del personaje: se dibuja en el canvas, dentro de este recuadro -->
@@ -98,7 +111,7 @@
           <input id="opt-renderDistance" type="range" />
         </label>
         <label class="field range-field">
-          <span>Sensibilidad del mouse <output id="opt-sensitivity-value"></output></span>
+          <span>Sensibilidad (mouse y joystick) <output id="opt-sensitivity-value"></output></span>
           <input id="opt-sensitivity" type="range" />
         </label>
         <label class="field range-field">

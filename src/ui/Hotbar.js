@@ -1,5 +1,6 @@
 // Hotbar: 9 casillas con bloques para construir, abajo en la pantalla.
-// Se elige con las teclas 1-9 o con la rueda del mouse.
+// Se elige con las teclas 1-9 o con la rueda del mouse; qué bloque va en
+// cada casilla se cambia en el menú de materiales (tecla E).
 
 import { BLOCK, getBlock } from '../world/blocks.js';
 import { getBlockIcon } from '../render/blockIcons.js';
@@ -18,6 +19,11 @@ export const DEFAULT_HOTBAR = Object.freeze([
   BLOCK.LEAVES,
   BLOCK.SAND,
 ]);
+
+/** ¿Se puede tener en la hotbar? (los del menú de materiales y sus variantes) */
+function isPlaceable(id) {
+  return Number.isInteger(id) && Boolean(getBlock(getBlock(id).item ?? id).category);
+}
 
 export class Hotbar {
   /**
@@ -74,11 +80,21 @@ export class Hotbar {
     if (steps) this.select(this.selected + steps);
   }
 
+  /** Pone un bloque en una casilla (y la elige). */
+  setSlot(index, id) {
+    const i = ((index % HOTBAR_SIZE) + HOTBAR_SIZE) % HOTBAR_SIZE;
+    this.slots[i] = isPlaceable(id) ? getBlock(id).item : this.slots[i];
+    this.selected = i;
+    this.render();
+    this._showName();
+    this.onChange?.(this.selectedBlock);
+  }
+
   /** Cambia el contenido de la hotbar (por ejemplo, al cargar una partida). */
   setSlots(slots, selected = 0) {
     for (let i = 0; i < HOTBAR_SIZE; i++) {
       const id = slots[i];
-      this.slots[i] = getBlock(id).tiles ? id : DEFAULT_HOTBAR[i];
+      this.slots[i] = isPlaceable(id) ? getBlock(id).item : DEFAULT_HOTBAR[i];
     }
     this.selected = Math.max(0, Math.min(HOTBAR_SIZE - 1, selected | 0));
     this.render();

@@ -21,6 +21,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Hud } from './ui/Hud.js';
 import { Menu } from './ui/Menu.js';
 import { DEFAULT_HOTBAR, Hotbar, HOTBAR_SIZE } from './ui/Hotbar.js';
+import { Inventory } from './ui/Inventory.js';
 import { BlockOutline } from './render/BlockOutline.js';
 import { HeldItem } from './render/HeldItem.js';
 import { getBlockGeometry } from './render/blockGeometry.js';
@@ -68,6 +69,7 @@ const STATE = Object.freeze({
   TITLE: 'title', // pantalla de inicio
   PLAYING: 'playing', // jugando (mouse capturado o con el joystick)
   PAUSED: 'paused', // menú de pausa
+  INVENTORY: 'inventory', // menú de materiales (el juego sigue de fondo)
 });
 
 class Game {
@@ -143,8 +145,11 @@ class Game {
     this.heldItem = new HeldItem(this.camera, this.materials);
     this.controls = new Controls(this.renderer.domElement);
     this.controls.onLockChange = (locked) => this.onLockChange(locked);
-    this.controls.onLockError = () =>
+    this.controls.onLockError = () => {
+      // Si fallaba al volver del menú de materiales, se pasa a la pausa.
+      if (this.state === STATE.INVENTORY) this.pause();
       this.menu.setMessage('No se pudo capturar el mouse. Esperá un segundo y probá de nuevo.');
+    };
     this.baseSensitivity = this.controls.sensitivity;
     this.controls.sensitivity = (this.baseSensitivity * this.prefs.sensitivity) / 100;
 
@@ -165,6 +170,11 @@ class Game {
     this.hotbar = new Hotbar(this.hud.root, this.atlas.canvas);
     this.hotbar.onChange = (id) => this.onHeldBlockChange(id);
     this.onHeldBlockChange(this.hotbar.selectedBlock);
+    this.inventory = new Inventory({
+      hotbar: this.hotbar,
+      atlas: this.atlas.canvas,
+      onClose: (resume) => this.closeInventory(resume),
+    });
 
     // --- Romper y poner bloques ---
     this.outline = new BlockOutline(this.scene);
@@ -206,6 +216,7 @@ class Game {
       onStart: () => this.padStart(),
     });
     this._soundHintShown = false;
+    this._materialsHintShown = false;
     this.padHelp = document.getElementById('pad-help');
     this.keysHelp = document.getElementById('keys-help');
 
@@ -522,9 +533,41 @@ class Game {
     this.hotbar.scroll(this.controls.consumeWheel() + padSteps);
   }
 
+  /** Abre el menú de materiales (tecla E o Vista del joystick). */
+  openInventory() {
+    this.state = STATE.INVENTORY;
+    this.interaction.release();
+    this.inventory.open();
+    // Se suelta el mouse para poder elegir (no es una pausa: ver onLockChange).
+    this.controls.unlock();
+  }
+
+  /**
+   * Cierra el menú de materiales: vuelve a jugar (E, Listo, joystick) o, con
+   * Esc, a la pausa (el navegador no deja capturar el mouse con Esc).
+   */
+  closeInventory(resume) {
+    if (this.state !== STATE.INVENTORY) return;
+    this.inventory.close();
+    if (resume) this.controls.lock();
+    else this.pause();
+  }
+
+  /** Pausa: menú de pausa y se guarda. */
+  pause() {
+    this.state = STATE.PAUSED;
+    this.inventory.close();
+    this.interaction.release();
+    this.menu.showPause();
+    // Si la palanca sigue inclinada, que no mueva el foco de la pausa.
+    this.padMenu.ignoreHeld();
+    this.saves.save();
+  }
+
   /** Joystick B en un menú: cierra el panel abierto o, en la pausa, sigue jugando. */
   padBack() {
-    if (!this.optionsMenu.panel.hidden) this.optionsMenu.close();
+    if (this.inventory.isOpen) this.closeInventory(true);
+    else if (!this.optionsMenu.panel.hidden) this.optionsMenu.close();
     else if (!this.multiplayerMenu.panel.hidden) this.multiplayerMenu.close();
     else if (!this.worldsMenu.newPanel.hidden || !this.worldsMenu.listPanel.hidden) this.worldsMenu.closeAll();
     else if (this.state === STATE.PAUSED) this.controls.lock();
@@ -533,6 +576,7 @@ class Game {
   /** Joystick Start en un menú: jugar (en el inicio) o seguir jugando (en la pausa). */
   padStart() {
     const panelOpen =
+      this.inventory.isOpen ||
       !this.optionsMenu.panel.hidden ||
       !this.multiplayerMenu.panel.hidden ||
       !this.worldsMenu.newPanel.hidden ||
@@ -579,8 +623,13 @@ class Game {
         // botón del joystick no cuenta).
         this._soundHintShown = true;
         this.hud.toast('Para escuchar los sonidos, hacé un clic o tocá una tecla', 4);
+      } else if (!this._materialsHintShown) {
+        this._materialsHintShown = true;
+        const key = this.controls.padPlaying ? this.controls.pad.labels.BACK : 'E';
+        this.hud.toast(`${key}: todos los materiales para construir`, 3);
       }
       this.state = STATE.PLAYING;
+      this.inventory.close();
       this.menu.hideAll();
       this.worldsMenu.closeAll();
       this.multiplayerMenu.close();
@@ -589,12 +638,7 @@ class Game {
       if (this.saves.current.id === null) this.saves.save();
     } else if (this.state === STATE.PLAYING) {
       // Esc (o perder el foco) suelta el mouse: pausa (y se guarda).
-      this.state = STATE.PAUSED;
-      this.interaction.release();
-      this.menu.showPause();
-      // Si la palanca sigue inclinada, que no mueva el foco de la pausa.
-      this.padMenu.ignoreHeld();
-      this.saves.save();
+      this.pause();
     }
   }
 
@@ -732,6 +776,11 @@ class Game {
     this.measureFrameTimes(realDt);
     this.controls.poll();
     this.updatePadConnection();
+    if (this.state === STATE.INVENTORY) {
+      // Vista (como E) cierra el menú de materiales y vuelve a jugar.
+      if (this.controls.pad.wasPressed(PAD.BACK)) this.closeInventory(true);
+      else this.inventory.update(this.controls.pad);
+    }
     if (this.state !== STATE.PLAYING) this.padMenu.update(dt);
 
     // El mundo se genera alrededor del jugador en todos los estados (así,
@@ -769,6 +818,7 @@ class Game {
         this.updateFov(dt);
         // Start pausa (con el mouse capturado, también lo suelta).
         if (pad.wasPressed(PAD.START)) this.controls.unlock();
+        else if (this.controls.wasPressed('KeyE') || pad.wasPressed(PAD.BACK)) this.openInventory();
       }
       // Primero la cámara: decide si hay lugar para mostrar al personaje.
       this.view.update(this.player, this.world);
@@ -805,7 +855,9 @@ function showFatalError(message) {
 try {
   const game = new Game(document.getElementById('game'));
   // Acceso desde la consola del navegador para depurar: window.megabrick
+  // (y la tabla de bloques en window.megabrick.bloques).
   window.megabrick = game;
+  game.bloques = { BLOCK, getBlock };
 } catch (err) {
   console.error(err);
   // Sin juego, el botón "Jugar" no haría nada: se desactiva y se avisa.

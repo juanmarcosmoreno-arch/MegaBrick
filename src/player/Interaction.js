@@ -1,9 +1,13 @@
 // Romper y poner bloques: bloque apuntado (raycast DDA desde los ojos),
 // contorno, clic izquierdo para romper y clic derecho para poner (con
 // joystick, gatillo derecho y gatillo izquierdo).
+//
+// Los escalones y las puertas se ponen mirando hacia donde mira el jugador;
+// una losa va arriba si se apunta a la mitad de arriba de una cara (o a un
+// techo). Clic derecho sobre una puerta la abre o la cierra.
 
 import * as THREE from 'three';
-import { BLOCK, getBlock } from '../world/blocks.js';
+import { BLOCK, COLLISION_BOXES, SHAPE, getBlock } from '../world/blocks.js';
 import { CHUNK_HEIGHT } from '../world/Chunk.js';
 import { PAD } from './Gamepad.js';
 import { raycast } from './Raycast.js';
@@ -95,52 +99,133 @@ export class BlockInteraction {
   }
 
   /**
-   * Rompe el bloque apuntado (salvo los indestructibles). Si tiene agua
-   * arriba o a un costado, el hueco se llena de agua: no hay agua que fluya,
-   * pero así no quedan burbujas de aire ni paredes de agua en el aire.
+   * Rompe el bloque apuntado (salvo los indestructibles). Una puerta se
+   * rompe entera (sus dos mitades).
    */
   breakTarget() {
     const t = this.target;
     if (!t || !getBlock(t.id).breakable) return false;
-    const w = this.world;
-    const wet = WATER_SOURCES.some(([dx, dy, dz]) => getBlock(w.getBlock(t.x + dx, t.y + dy, t.z + dz)).liquid);
-    if (!w.editBlock(t.x, t.y, t.z, wet ? BLOCK.WATER : BLOCK.AIR)) return false;
+    if (!this._clear(t.x, t.y, t.z)) return false;
+    const partner = doorPartner(this.world, t.x, t.y, t.z, t.id);
+    if (partner) this._clear(t.x, partner.y, t.z);
     this.onAction?.('break', t.id);
     return true;
   }
 
-  /** Pone el bloque elegido en la hotbar contra la cara apuntada. */
+  /**
+   * Saca un bloque. Si tiene agua arriba o a un costado, el hueco se llena
+   * de agua: no hay agua que fluya, pero así no quedan burbujas de aire ni
+   * paredes de agua en el aire.
+   */
+  _clear(x, y, z) {
+    const w = this.world;
+    const wet = WATER_SOURCES.some(([dx, dy, dz]) => getBlock(w.getBlock(x + dx, y + dy, z + dz)).liquid);
+    return w.editBlock(x, y, z, wet ? BLOCK.WATER : BLOCK.AIR);
+  }
+
+  /**
+   * Pone el bloque elegido en la hotbar contra la cara apuntada (o, si se
+   * apunta a una puerta, la abre o la cierra).
+   */
   placeAtTarget() {
     const t = this.target;
     if (!t) return false;
+    if (getBlock(t.id).shape === SHAPE.DOOR) return this._toggleDoor(t);
     const [x, y, z] = t.place;
     // Origen dentro de un bloque (sin cara) o fuera del alto del mundo: nada.
     if (t.normal.every((n) => n === 0) || y < 1 || y >= CHUNK_HEIGHT) return false;
-    // Solo en aire o agua (el agua se reemplaza).
-    const current = getBlock(this.world.getBlock(x, y, z));
-    if (current.id !== BLOCK.AIR && !current.liquid) return false;
-    const id = this.hotbar.selectedBlock;
-    if (getBlock(id).solid && this._intersectsPlayer(x, y, z)) return false;
+    if (!this._isFree(x, y, z)) return false;
+    const item = this.hotbar.selectedBlock;
+    const block = getBlock(item);
+    if (block.shape === SHAPE.DOOR) return this._placeDoor(x, y, z, block);
+    const id = this._variantFor(block, t);
+    if (this._intersectsPlayer(x, y, z, id)) return false;
     if (!this.world.editBlock(x, y, z, id)) return false;
     this.onAction?.('place', id);
     return true;
   }
 
+  /** ¿Se puede poner algo en (x, y, z)? Solo en aire o agua (el agua se reemplaza). */
+  _isFree(x, y, z) {
+    const current = getBlock(this.world.getBlock(x, y, z));
+    return current.id === BLOCK.AIR || current.liquid;
+  }
+
+  /** Hacia dónde mira el jugador, redondeado a norte, este, sur u oeste (ver FACING). */
+  get facing() {
+    // yaw 0 mira al norte (-Z) y crece girando a la izquierda (al oeste).
+    const quarter = ((Math.round(this.player.yaw / (Math.PI / 2)) % 4) + 4) % 4;
+    return (4 - quarter) % 4;
+  }
+
   /**
-   * ¿El bloque (x, y, z) se superpondría con la caja del jugador? Usa la
-   * misma cuenta que la física, así nunca se pone un bloque que la física
-   * considere "adentro" del jugador.
+   * El bloque a poner según la forma: el escalón mirando como el jugador, la
+   * losa arriba si se apunta a un techo o a la mitad de arriba de una cara.
    */
-  _intersectsPlayer(x, y, z) {
+  _variantFor(block, t) {
+    if (block.shape === SHAPE.STAIRS) return block.variants[this.facing];
+    if (block.shape === SHAPE.SLAB && block.slabTop) {
+      const [, ny] = t.normal;
+      const upper = ny === -1 || (ny === 0 && t.point[1] - Math.floor(t.point[1]) > 0.5);
+      return upper ? block.slabTop : block.id;
+    }
+    return block.id;
+  }
+
+  /** Pone una puerta: necesita dos lugares libres, uno arriba del otro. */
+  _placeDoor(x, y, z, block) {
+    if (y + 1 >= CHUNK_HEIGHT || !this._isFree(x, y + 1, z)) return false;
+    const f = this.facing;
+    const bottom = block.doorIds[`${f}00`];
+    const top = block.doorIds[`${f}01`];
+    if (this._intersectsPlayer(x, y, z, bottom) || this._intersectsPlayer(x, y + 1, z, top)) return false;
+    if (!this.world.editBlock(x, y, z, bottom)) return false;
+    this.world.editBlock(x, y + 1, z, top);
+    this.onAction?.('place', bottom);
+    return true;
+  }
+
+  /** Abre o cierra la puerta apuntada (las dos mitades). */
+  _toggleDoor(t) {
+    const door = getBlock(t.id);
+    const toggled = (b) => b.doorIds[`${b.facing}${b.open ? 0 : 1}${b.upper ? 1 : 0}`];
+    const next = toggled(door);
+    // Al cerrarla no puede quedar adentro del jugador.
+    if (this._intersectsPlayer(t.x, t.y, t.z, next)) return false;
+    const partner = doorPartner(this.world, t.x, t.y, t.z, t.id);
+    if (!this.world.editBlock(t.x, t.y, t.z, next)) return false;
+    if (partner) this.world.editBlock(t.x, partner.y, t.z, toggled(getBlock(partner.id)));
+    this.onAction?.('place', t.id);
+    return true;
+  }
+
+  /**
+   * ¿El bloque `id` en (x, y, z) se superpondría con la caja del jugador?
+   * Usa las cajas de choque, igual que la física: nunca se pone algo que la
+   * física considere "adentro" del jugador (pero una losa de arriba sí se
+   * puede poner sobre la cabeza si queda lugar).
+   */
+  _intersectsPlayer(x, y, z, id) {
+    const boxes = COLLISION_BOXES[id];
+    if (!boxes) return false;
     const p = this.player.position;
     const half = this.player.width / 2;
-    return (
-      x >= Math.floor(p.x - half + EPS) &&
-      x <= Math.floor(p.x + half - EPS) &&
-      y >= Math.floor(p.y + EPS) &&
-      y <= Math.floor(p.y + this.player.height - EPS) &&
-      z >= Math.floor(p.z - half + EPS) &&
-      z <= Math.floor(p.z + half - EPS)
-    );
+    const lo = [p.x - half, p.y, p.z - half];
+    const hi = [p.x + half, p.y + this.player.height, p.z + half];
+    const cell = [x, y, z];
+    return boxes.some((b) => [0, 1, 2].every((a) => cell[a] + b[a] < hi[a] - EPS && cell[a] + b[a + 3] > lo[a] + EPS));
   }
+}
+
+/**
+ * La otra mitad de una puerta: la de arriba o la de abajo, si es la misma
+ * puerta (misma orientación y estado). null si no es una puerta o no está.
+ */
+function doorPartner(world, x, y, z, id) {
+  const door = getBlock(id);
+  if (door.shape !== SHAPE.DOOR) return null;
+  const py = door.upper ? y - 1 : y + 1;
+  const other = getBlock(world.getBlock(x, py, z));
+  if (other.doorIds !== door.doorIds || other.facing !== door.facing || other.upper === door.upper) return null;
+  return { y: py, id: other.id };
 }

@@ -42,7 +42,7 @@ function skyFog(shader) {
 }
 
 /**
- * Crea los materiales de las tres capas de render a partir del atlas.
+ * Crea los materiales de las capas de render a partir del atlas.
  * Se devuelven en un array indexado por LAYER.
  */
 export function createBlockMaterials(atlasTexture) {
@@ -70,15 +70,22 @@ export function createBlockMaterials(atlasTexture) {
     side: THREE.DoubleSide,
   });
 
+  // Faroles: brillan solos, igual de día y de noche (sin luces ni sombras).
+  const glow = new THREE.MeshBasicMaterial({
+    map: atlasTexture,
+    vertexColors: true,
+  });
+
   // Niebla radial y del color del cielo: Three.js calcula la niebla con la
   // profundidad (distancia al plano de la cámara), así que en los costados de
   // la pantalla lo lejano queda con menos niebla y se ve el borde del mundo.
   // Con la distancia real la niebla es pareja en todas las direcciones.
-  for (const m of [opaque, cutout, translucent]) m.onBeforeCompile = skyFog;
+  for (const m of [opaque, cutout, translucent, glow]) m.onBeforeCompile = skyFog;
 
   const materials = [];
   materials[LAYER.OPAQUE] = opaque;
   materials[LAYER.CUTOUT] = cutout;
   materials[LAYER.TRANSLUCENT] = translucent;
+  materials[LAYER.GLOW] = glow;
   return materials;
 }

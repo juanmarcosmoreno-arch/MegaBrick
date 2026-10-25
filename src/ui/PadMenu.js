@@ -9,7 +9,15 @@
 import { PAD } from '../player/Gamepad.js';
 
 /** Pantallas y paneles, del que queda más arriba al de más abajo. */
-const LAYERS = ['options-panel', 'mp-panel', 'new-world-panel', 'worlds-panel', 'pause-screen', 'title-screen'];
+const LAYERS = [
+  'inventory-panel',
+  'options-panel',
+  'mp-panel',
+  'new-world-panel',
+  'worlds-panel',
+  'pause-screen',
+  'title-screen',
+];
 const FOCUSABLE = 'button, input, [tabindex]:not([tabindex="-1"])';
 /** La palanca cuenta como una dirección de la cruz desde acá. */
 const STICK_THRESHOLD = 0.5;

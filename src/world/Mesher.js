@@ -13,8 +13,11 @@
 // Oclusión ambiental por vértice: cada esquina de cada cara se oscurece según
 // cuántos bloques sólidos la rodean (los rincones y la base de las paredes
 // quedan en penumbra), y eso se guarda en el color del vértice.
+//
+// Los bloques con forma (losas, escalones, puertas) se dibujan con sus cajas:
+// cada caja con sus 6 caras y la textura recortada a su tamaño (no estirada).
 
-import { BLOCK, BLOCKS } from './blocks.js';
+import { BLOCK, BLOCKS, LAYER } from './blocks.js';
 import { CHUNK_HEIGHT, CHUNK_SIZE } from './Chunk.js';
 import { tileUV } from '../render/atlasLayout.js';
 
@@ -107,27 +110,49 @@ const OPAQUE = new Uint8Array(MAX_ID);
 const LAYER_OF = new Int8Array(MAX_ID).fill(-1); // -1 = no se dibuja (aire)
 const CULL_SAME = new Uint8Array(MAX_ID);
 const LIQUID = new Uint8Array(MAX_ID);
+/** Sin oclusión: el agua (se vería manchada) y lo que brilla solo. */
+const NO_SHADE = new Uint8Array(MAX_ID);
 /** UV de cada cara de cada bloque: [id * 24 + cara * 4 + (u0, v0, u1, v1)]. */
 const FACE_UVS = new Float32Array(MAX_ID * 24);
+/** Cajas de los bloques con forma (null para los cubos). */
+const SHAPE_BOXES = new Array(MAX_ID).fill(null);
 for (const block of BLOCKS) {
   if (!block) continue;
   OPAQUE[block.id] = block.opaque ? 1 : 0;
   LAYER_OF[block.id] = block.layer ?? -1;
   CULL_SAME[block.id] = block.cullSame ? 1 : 0;
   LIQUID[block.id] = block.liquid ? 1 : 0;
+  NO_SHADE[block.id] = block.liquid || block.layer === LAYER.GLOW ? 1 : 0;
+  if (block.boxes) SHAPE_BOXES[block.id] = block.boxes.map((b) => Float32Array.from(b));
   if (!block.tiles) continue;
   FACES.forEach((face, f) => FACE_UVS.set(tileUV(block.tiles[face.tile]), block.id * 24 + f * 4));
 }
 
-/** Esquinas de cada cara, aplanadas: [cara * 20 + esquina * 5 + (x, y, z, u, v)]. */
-const CORNERS = new Float32Array(6 * 20);
+/** Esquinas de cada cara (0 o 1 en cada eje): [cara * 12 + esquina * 3 + (x, y, z)]. */
+const CORNERS = new Uint8Array(6 * 12);
 const NORMALS = new Float32Array(6 * 3);
-const IS_SIDE = new Uint8Array(6);
+/**
+ * Qué eje del bloque va en cada coordenada de la textura de cada cara, y si
+ * va al revés: [cara * 4 + (eje de u, u invertida, eje de v, v invertida)].
+ * Así la textura de una caja más chica que el bloque se recorta en vez de
+ * estirarse (y en las caras de costado del agua baja, también).
+ */
+const UV_AXES = new Uint8Array(6 * 4);
 FACES.forEach((face, f) => {
   NORMALS.set(face.dir, f * 3);
-  IS_SIDE[f] = face.tile === 'side' ? 1 : 0;
-  face.corners.forEach(({ pos, uv }, c) => CORNERS.set([...pos, ...uv], f * 20 + c * 5));
+  face.corners.forEach(({ pos }, c) => CORNERS.set(pos, f * 12 + c * 3));
+  for (const k of [0, 1]) {
+    for (let axis = 0; axis < 3; axis++) {
+      if (face.dir[axis] !== 0) continue;
+      const same = face.corners.every(({ pos, uv }) => uv[k] === pos[axis]);
+      const flipped = face.corners.every(({ pos, uv }) => uv[k] === 1 - pos[axis]);
+      if (same || flipped) UV_AXES.set([axis, flipped ? 1 : 0], f * 4 + k * 2);
+    }
+  }
 });
+
+/** Caja de un bloque entero y la del agua sin agua arriba (más baja). */
+const FULL_BOX = new Float32Array([0, 0, 0, 1, 1, 1]);
 
 // ---------------------------------------------------------------------------
 // Copia del chunk con un borde de un bloque (de los 8 chunks vecinos): así
@@ -240,18 +265,27 @@ class LayerBuffer {
   }
 }
 
-const LAYERS = [new LayerBuffer(), new LayerBuffer(), new LayerBuffer()];
+const LAYERS = [new LayerBuffer(), new LayerBuffer(), new LayerBuffer(), new LayerBuffer()];
 
-/** Agrega una cara (4 vértices) del bloque `id` en (x, y, z); `pi`: su índice en la copia con borde `pad`. */
-function emitFace(buf, pad, f, id, x, y, z, pi, topHeight) {
+/** Esquina de una caja en el eje `axis`: el mínimo (0) o el máximo (1). */
+const corner = (box, axis, bit) => box[bit ? axis + 3 : axis];
+
+/**
+ * Agrega una cara (4 vértices) de una caja del bloque `id` en (x, y, z);
+ * `pi`: su índice en la copia con borde `pad`. `box`: [x0, y0, z0, x1, y1,
+ * z1] dentro del bloque. La oclusión se calcula solo si la cara está en el
+ * borde del bloque (las de adentro de una losa o un escalón van sin sombra).
+ */
+function emitFace(buf, pad, f, id, x, y, z, pi, box) {
   buf.reserveQuad();
   const P = buf.positions;
   const N = buf.normals;
   const T = buf.uvs;
   const L = buf.light;
   const quad = buf.vertexCount >> 2;
-  // El agua no lleva oclusión (se vería manchada).
-  const shade = !LIQUID[id];
+  const axis = f >> 1; // 0 x, 1 y, 2 z (FACES va de a pares por eje)
+  const onEdge = f & 1 ? box[axis + 3] === 1 : box[axis] === 0;
+  const shade = !NO_SHADE[id] && onEdge;
   const aoBase = f * 12;
   const uvBase = id * 24 + f * 4;
   const u0 = FACE_UVS[uvBase];
@@ -261,22 +295,27 @@ function emitFace(buf, pad, f, id, x, y, z, pi, topHeight) {
   const nx = NORMALS[f * 3];
   const ny = NORMALS[f * 3 + 1];
   const nz = NORMALS[f * 3 + 2];
-  const side = IS_SIDE[f];
+  const ua = UV_AXES[f * 4];
+  const uFlip = UV_AXES[f * 4 + 1];
+  const va = UV_AXES[f * 4 + 2];
+  const vFlip = UV_AXES[f * 4 + 3];
   for (let c = 0; c < 4; c++) {
-    const k = f * 20 + c * 5;
+    const k = f * 12 + c * 3;
     const v = buf.vertexCount++;
-    const cy = CORNERS[k + 1];
-    P[v * 3] = x + CORNERS[k];
-    P[v * 3 + 1] = y + (cy === 1 ? topHeight : 0);
-    P[v * 3 + 2] = z + CORNERS[k + 2];
+    const px = corner(box, 0, CORNERS[k]);
+    const py = corner(box, 1, CORNERS[k + 1]);
+    const pz = corner(box, 2, CORNERS[k + 2]);
+    P[v * 3] = x + px;
+    P[v * 3 + 1] = y + py;
+    P[v * 3 + 2] = z + pz;
     N[v * 3] = nx;
     N[v * 3 + 1] = ny;
     N[v * 3 + 2] = nz;
-    // En caras laterales de agua baja, recortar la textura igual que la
-    // geometría para que no se estire.
-    const tv = CORNERS[k + 4];
-    T[v * 2] = u0 + du * CORNERS[k + 3];
-    T[v * 2 + 1] = v0 + dv * (side && tv === 1 ? topHeight : tv);
+    // La textura va recortada como la caja (no se estira).
+    const pu = ua === 0 ? px : ua === 1 ? py : pz;
+    const pv = va === 0 ? px : va === 1 ? py : pz;
+    T[v * 2] = u0 + du * (uFlip ? 1 - pu : pu);
+    T[v * 2 + 1] = v0 + dv * (vFlip ? 1 - pv : pv);
     let ao = 3;
     if (shade) {
       const o = aoBase + c * 3;
@@ -342,6 +381,7 @@ export function buildChunkMesh(data, neighbors = {}, maxY = CHUNK_HEIGHT - 1) {
  */
 export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
   for (const l of LAYERS) l.vertexCount = 0;
+  const waterBox = new Float32Array([0, 0, 0, 1, WATER_SURFACE, 1]);
   const neighbor = new Uint8Array(6); // -X, +X, -Y, +Y, -Z, +Z (orden de FACES)
   const lastY = CHUNK_HEIGHT - 1;
   const top = Math.min(lastY, maxY);
@@ -373,15 +413,30 @@ export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
           continue;
         }
 
-        // El agua sin agua arriba se dibuja un poco más baja; en ese caso la
-        // tapa se dibuja siempre, aunque arriba haya algo (si no, queda un hueco).
-        const lowered = LIQUID[id] && neighbor[3] !== id;
-        const topHeight = lowered ? WATER_SURFACE : 1;
         const buf = LAYERS[layer];
         const before = buf.vertexCount;
-        for (let f = 0; f < 6; f++) {
-          if ((f === 3 && lowered) || faceVisible(id, neighbor[f])) {
-            emitFace(buf, pad, f, id, x, y, z, pi, topHeight);
+        const boxes = SHAPE_BOXES[id];
+        if (boxes) {
+          // Con forma: cada caja entera, salvo las caras pegadas a un bloque
+          // opaco del costado.
+          for (const box of boxes) {
+            for (let f = 0; f < 6; f++) {
+              const axis = f >> 1;
+              const onEdge = f & 1 ? box[axis + 3] === 1 : box[axis] === 0;
+              if (onEdge && OPAQUE[neighbor[f]]) continue;
+              emitFace(buf, pad, f, id, x, y, z, pi, box);
+            }
+          }
+        } else {
+          // El agua sin agua arriba se dibuja un poco más baja; en ese caso
+          // la tapa se dibuja siempre, aunque arriba haya algo (si no, queda
+          // un hueco).
+          const lowered = LIQUID[id] && neighbor[3] !== id;
+          const box = lowered ? waterBox : FULL_BOX;
+          for (let f = 0; f < 6; f++) {
+            if ((f === 3 && lowered) || faceVisible(id, neighbor[f])) {
+              emitFace(buf, pad, f, id, x, y, z, pi, box);
+            }
           }
         }
         if (buf.vertexCount !== before) {

@@ -28,6 +28,7 @@ El juego se construye por etapas. Siempre queda una versión jugable.
 | 6 | Ciclo día/noche, oclusión ambiental, sonidos, opciones | ✅ |
 | 7 | Rendimiento: Web Workers, cola de chunks priorizada | ✅ |
 | 8 | Joystick (Xbox, PlayStation y otros): jugar y usar los menús | ✅ |
+| 9 | Materiales de construcción: madera, piedra, ladrillo, revoque de colores, tejas, escalones, losas, puertas, ventanas y faroles; menú de materiales | ✅ |
 
 ## Requisitos
 
@@ -76,6 +77,7 @@ Ejemplo: `http://localhost:5173/megabrick/?semilla=islas&distancia=8`.
 | **Clic izquierdo** | Romper el bloque apuntado (mantenido, sigue rompiendo) |
 | **Clic derecho** | Poner el bloque elegido en la cara apuntada |
 | **1 – 9** o **rueda del mouse** | Elegir casilla de la hotbar |
+| **E** | Menú de materiales: elegir qué bloque va en cada casilla (E o Esc lo cierran) |
 | **V** | Cambiar la cámara: primera persona → tercera persona → de frente |
 | **F3** | Mostrar u ocultar coordenadas, chunk, hacia dónde se mira, la hora, el tiempo por cuadro y más datos |
 | **Esc** | Soltar el mouse y pausar (en la pausa: Opciones, Multijugador, Guardar y salir) |
@@ -94,6 +96,7 @@ También se juega con un joystick de Xbox, de PlayStation o cualquiera que el na
 | **RT / R2** | Romper (mantenido, sigue rompiendo) |
 | **LT / L2** | Poner el bloque elegido |
 | **LB RB / L1 R1** | Elegir casilla de la hotbar |
+| **Vista / Create** | Menú de materiales (adentro, LB RB cambian de casilla, A pone el material y B vuelve) |
 | **X / □** | Cambiar la cámara |
 | **Menú / Options** | Pausa (y en el inicio, Jugar) |
 
@@ -114,7 +117,13 @@ Algunas cosas siguen pidiendo el teclado o el mouse: escribir (nombre de un mund
 
 - **Bloque apuntado:** la mira del centro marca el bloque al que apuntás, con un contorno, hasta 6 bloques de distancia. El cálculo es un raycast voxel con el algoritmo DDA, que no saltea ningún bloque. El agua se atraviesa con la mirada.
 - **Romper y poner:** clic izquierdo rompe el bloque, salvo el lecho primordial, que es indestructible. Clic derecho pone el bloque elegido sobre la cara apuntada, pero nunca dentro del jugador. Manteniendo el botón, se repite cada cuarto de segundo.
-- **Hotbar:** tiene 9 casillas abajo de la pantalla: césped, tierra, piedra, tablones, ladrillo de piedra, vidrio, tronco, follaje y arena. El bloque elegido se ve en la mano, en primera persona y también en el personaje en tercera persona.
+- **Hotbar:** tiene 9 casillas abajo de la pantalla. Un mundo nuevo empieza con césped, tierra, piedra, tablones, ladrillo de piedra, vidrio, tronco, follaje y arena. El bloque elegido se ve en la mano, en primera persona y también en el personaje en tercera persona.
+- **Menú de materiales (E):** muestra todos los bloques para construir, en 7 grupos: naturaleza, madera, piedra y ladrillo, revoque de colores, techos, escalones y losas, y puertas, ventanas y detalles. Arriba están las 9 casillas: elegís una y después el material que va en ella (también con las teclas 1 – 9). Lo que ponés en la hotbar se guarda con el mundo.
+- **Escalones:** se ponen mirando hacia donde mirás, con la parte alta del lado de enfrente, así que para hacer una escalera o un techo a dos aguas alcanza con mirar hacia donde sube. Se suben caminando, sin saltar.
+- **Losas:** medio bloque. Van abajo, salvo que apuntes a un techo o a la mitad de arriba de una pared: ahí van arriba. Una losa también se sube caminando (un bloque entero sigue pidiendo saltar).
+- **Puertas:** ocupan dos bloques de alto y se ponen mirando hacia donde mirás, con la bisagra a tu izquierda. Clic derecho (o el gatillo izquierdo del joystick) las abre y las cierra; rotas, se va la puerta entera. Abiertas dejan pasar; cerradas, no.
+- **Faroles:** brillan solos, igual de día que de noche (no iluminan lo de alrededor).
+- **Formas:** las losas, los escalones y las puertas chocan, se apuntan y se marcan con su forma real (por el hueco de una losa se apunta lo de atrás).
 - **Mallas:** al cambiar un bloque se rearma enseguida solo la malla de su chunk, y la del chunk vecino si el bloque está en el borde.
 - **Agua:** si rompés un bloque con agua arriba o a un costado, el hueco se llena de agua. Por ahora el agua no fluye.
 - **Tus cambios se recuerdan:** se guardan como diferencias respecto del terreno generado. Si te alejás y el chunk se descarga, al volver tu construcción sigue ahí. Ese registro es lo que se guarda en el navegador y lo que se comparte en el multijugador.
@@ -207,7 +216,7 @@ src/
   main.js               → arranque, estados del juego y loop principal
   style.css             → estilos del HUD y los menús
   world/
-    blocks.js           → tipos de bloque y sus propiedades
+    blocks.js           → tipos de bloque, sus propiedades y formas (losas, escalones, puertas)
     Chunk.js            → datos de un chunk de 16×128×16 (Uint8Array, 0 = aire)
     World.js            → chunks alrededor del jugador (carga/descarga, cola de prioridad), get/set de bloques, mallas
     ChunkWorkers.js     → grupo de Web Workers: reparte los trabajos y avisa cuando terminan
@@ -234,10 +243,11 @@ src/
     BlockOutline.js     → contorno del bloque apuntado
     HeldItem.js         → bloque en la mano en primera persona
     blockGeometry.js    → geometría de un bloque suelto
-    blockIcons.js       → íconos isométricos de los bloques para la hotbar
+    blockIcons.js       → íconos isométricos de los bloques (con su forma) para la hotbar y el menú
   ui/
     Hud.js              → mira, FPS, avisos y datos de F3
     Hotbar.js           → las 9 casillas de bloques
+    Inventory.js        → menú de materiales (tecla E): todos los bloques por grupos
     Menu.js             → pantalla de inicio (con selector de color) y menú de pausa
     MultiplayerMenu.js  → panel de multijugador, lista de jugadores y datos en la pausa
     WorldsMenu.js       → Continuar/Jugar, nuevo mundo, lista de mundos (jugar y borrar) y estado del guardado
@@ -274,8 +284,24 @@ src/
 | 12 | Tablones | Para construir |
 | 13 | Ladrillo de piedra | Para construir |
 | 14 | Vidrio | Transparente, para construir |
+| 15 – 21 | Tablones oscuros, sus 4 escalones y 2 losas | |
+| 22 – 24 | Tablones claros, tablones rojizos, parqué | |
+| 25 – 31 | Empedrado, escalones y losas | |
+| 32 | Piedra lisa | |
+| 33 – 39 | Ladrillos, escalones y losas | |
+| 40 – 46 | Mármol, escalones y losas | |
+| 47 – 53 | Arenisca, escalones y losas | |
+| 54 | Baldosas | |
+| 55 – 66 | Revoque blanco, crema, gris, negro, rojo, naranja, amarillo, verde, celeste, azul, violeta y rosa | |
+| 67 – 80 | Tejas rojas y tejas grises, con escalones y losas | |
+| 81 | Paja | |
+| 82 – 113 | Puerta de madera y puerta oscura | 16 IDs cada una: 4 orientaciones, cerrada o abierta, mitad de abajo o de arriba |
+| 114 – 116 | Ventana, farol, biblioteca | El farol brilla solo |
+| 117 – 128 | Escalones y losas de tablones y de ladrillo de piedra | |
 
-Para agregar un bloque se suma una fila en `src/world/blocks.js` y, si necesita una textura nueva, su nombre en `src/render/atlasLayout.js` y su pintor en `src/render/textures.js`.
+Cada escalón usa 4 IDs (uno por orientación) y cada losa 2 (abajo y arriba): en la hotbar y en el menú se ve uno solo, y al ponerlo se elige el que corresponde. Los IDs se guardan en los mundos, así que los bloques nuevos se agregan siempre al final.
+
+Para agregar un bloque se suma una línea en `src/world/blocks.js` (con `add`, o `addMaterial` si lleva escalones y losas) y, si necesita una textura nueva, su nombre en `src/render/atlasLayout.js` y su pintor en `src/render/textures.js`. Las formas se describen con cajas (`boxes`): con ellas se dibuja, se choca y se apunta.
 
 ## Publicación en GitHub Pages
 

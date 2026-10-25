@@ -17,8 +17,8 @@ export const TILE_PADDING = 2;
 /** Lugar que ocupa cada textura en el atlas: textura + márgenes. */
 export const CELL_SIZE = TILE_SIZE + TILE_PADDING * 2;
 
-/** Cantidad de texturas por fila/columna del atlas (8x8 = 64 lugares). */
-export const ATLAS_TILES = 8;
+/** Cantidad de texturas por fila/columna del atlas (16x16 = 256 lugares). */
+export const ATLAS_TILES = 16;
 
 /** Tamaño total del atlas en píxeles. */
 export const ATLAS_SIZE = CELL_SIZE * ATLAS_TILES;
@@ -45,6 +45,41 @@ export const TILE_NAMES = Object.freeze([
   'planks',
   'stone_brick',
   'glass',
+  // Materiales de construcción (etapa 9).
+  'planks_dark',
+  'planks_light',
+  'planks_red',
+  'cobble',
+  'smooth_stone',
+  'bricks',
+  'marble',
+  'sandstone_top',
+  'sandstone_side',
+  'roof_red',
+  'roof_gray',
+  'thatch_top',
+  'thatch_side',
+  'plaster_white',
+  'plaster_cream',
+  'plaster_gray',
+  'plaster_black',
+  'plaster_red',
+  'plaster_orange',
+  'plaster_yellow',
+  'plaster_green',
+  'plaster_lightblue',
+  'plaster_blue',
+  'plaster_purple',
+  'plaster_pink',
+  'window',
+  'lamp',
+  'door_wood_top',
+  'door_wood_bottom',
+  'door_dark_top',
+  'door_dark_bottom',
+  'floor_tiles',
+  'parquet',
+  'bookshelf',
 ]);
 
 const uvCache = new Map();

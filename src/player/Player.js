@@ -1,14 +1,16 @@
 // Jugador: posición, orientación, movimiento y física.
 //
 // El cuerpo es una caja (AABB) de 0,6 de ancho y 1,8 de alto que choca
-// contra los bloques sólidos. Hay gravedad y salto; un escalón de un bloque
-// solo se sube saltando. Ctrl (o doble toque de W) corre, F activa el vuelo
+// contra los bloques sólidos (contra sus cajas: una losa ocupa medio bloque).
+// Hay gravedad y salto; un bloque entero solo se sube saltando, pero un
+// escalón o una losa (medio bloque) se suben caminando. Ctrl (o doble toque de W) corre, F activa el vuelo
 // y en el agua se nada: uno se hunde despacio y sube con Espacio.
 //
 // Con joystick: la palanca izquierda mueve (inclinándola poco, más despacio),
 // A es Espacio, B baja volando y apretar la palanca izquierda corre.
 
 import * as THREE from 'three';
+import { COLLISION_BOXES } from '../world/blocks.js';
 import { PAD } from './Gamepad.js';
 
 const HALF_PI = Math.PI / 2 - 0.001;
@@ -42,6 +44,10 @@ const DOUBLE_TAP = 0.3;
 /** Paso máximo de movimiento por sub-paso: evita atravesar bloques. */
 const MAX_STEP = 0.4;
 const EPS = 1e-6;
+/** Lo más alto que se sube caminando, sin saltar (un escalón o una losa). */
+const STEP_HEIGHT = 0.5 + 1e-3;
+/** Qué tan rápido la cámara alcanza la altura nueva al subir un escalón. */
+const STEP_SMOOTH = 14;
 
 export class Player {
   constructor() {
@@ -69,6 +75,8 @@ export class Player {
     this._padSprint = false;
     this._time = 0;
     this._wish = new THREE.Vector3();
+    this._start = new THREE.Vector3();
+    this._eyeLag = 0; // al subir un escalón, la cámara sube suave (negativo: todavía abajo)
   }
 
   /** Coloca al jugador en una posición (pies) mirando hacia yaw/pitch. */
@@ -78,6 +86,7 @@ export class Player {
     this.yaw = yaw;
     this.pitch = pitch;
     this.onGround = false;
+    this._eyeLag = 0;
   }
 
   /** Activa o desactiva el vuelo. */
@@ -94,6 +103,7 @@ export class Player {
    */
   update(dt, controls, world) {
     this._time += dt;
+    this._eyeLag *= Math.exp(-STEP_SMOOTH * dt);
 
     // --- Mirar con el mouse o la palanca derecha ---
     const look = controls.consumeLook(dt);
@@ -200,7 +210,13 @@ export class Player {
       vyMove = WATER_CLIMB_SPEED;
     }
 
-    this._move(world, v.x * dt, vyMove * dt, v.z * dt);
+    // Caminando, un escalón o una losa se suben solos (volando o nadando, no).
+    const canStep = !this.flying && !this.inWater && this.onGround && vyMove <= 0;
+    const vx = v.x;
+    const vz = v.z;
+    this._start.copy(this.position);
+    this._move(world, vx * dt, vyMove * dt, vz * dt);
+    if (canStep && this._collidedH) this._step(world, vx, vz, dt);
 
     // Correr contra una pared no cuenta como correr (vuelve el FOV normal).
     if (this._collidedH && this.horizontalSpeed < 1) this.sprinting = false;
@@ -243,45 +259,102 @@ export class Player {
   }
 
   /**
-   * Mueve sobre un eje (0 = X, 1 = Y, 2 = Z). Si la caja queda dentro de un
-   * bloque sólido, la pega a la cara de ese bloque y devuelve true.
+   * Chocó de costado caminando: prueba si era un escalón de medio bloque.
+   * Vuelve a donde estaba, sube, avanza y baja hasta apoyarse; si así llegó
+   * más lejos, se queda (y la cámara sube suave); si no, deshace el intento.
+   */
+  _step(world, vx, vz, dt) {
+    const p = this.position;
+    const v = this.velocity;
+    const dx = vx * dt;
+    const dz = vz * dt;
+    const plain = { x: p.x, y: p.y, z: p.z, vx: v.x, vz: v.z };
+    const plainDist = Math.hypot(p.x - this._start.x, p.z - this._start.z);
+    p.copy(this._start);
+    let ok = !this._moveAxis(world, 1, STEP_HEIGHT);
+    let hitX = false;
+    let hitZ = false;
+    if (ok) {
+      const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dz)) / MAX_STEP));
+      for (let i = 0; i < steps; i++) {
+        if (!hitX && dx !== 0) hitX = this._moveAxis(world, 0, dx / steps);
+        if (!hitZ && dz !== 0) hitZ = this._moveAxis(world, 2, dz / steps);
+      }
+      // Tiene que apoyarse arriba del escalón (si no, era un pozo o una pared).
+      ok = this._moveAxis(world, 1, -STEP_HEIGHT) && Math.hypot(p.x - this._start.x, p.z - this._start.z) > plainDist + 1e-4;
+    }
+    if (!ok) {
+      p.set(plain.x, plain.y, plain.z);
+      v.x = plain.vx;
+      v.z = plain.vz;
+      return;
+    }
+    this._eyeLag -= p.y - this._start.y;
+    this.onGround = true;
+    this._collidedH = hitX || hitZ;
+    v.y = 0;
+    // La velocidad que había (el primer intento la frenó contra el escalón).
+    v.x = hitX ? 0 : vx;
+    v.z = hitZ ? 0 : vz;
+  }
+
+  /**
+   * Mueve sobre un eje (0 = X, 1 = Y, 2 = Z). Si la caja queda dentro de
+   * algo sólido (un bloque o la caja de una losa, un escalón o una puerta),
+   * la pega a esa cara y devuelve true.
    */
   _moveAxis(world, axis, d) {
     const p = this.position;
     p.setComponent(axis, p.getComponent(axis) + d);
-
     const half = this.width / 2;
-    const minX = Math.floor(p.x - half + EPS);
-    const maxX = Math.floor(p.x + half - EPS);
-    const minY = Math.floor(p.y + EPS);
-    const maxY = Math.floor(p.y + this.height - EPS);
-    const minZ = Math.floor(p.z - half + EPS);
-    const maxZ = Math.floor(p.z + half - EPS);
+    const lo = [p.x - half, p.y, p.z - half];
+    const hi = [p.x + half, p.y + this.height, p.z + half];
 
-    // Como cada sub-paso avanza menos de un bloque, los bloques que ahora
-    // se pisan están todos en la capa del frente del movimiento.
-    for (let by = minY; by <= maxY; by++) {
-      for (let bz = minZ; bz <= maxZ; bz++) {
-        for (let bx = minX; bx <= maxX; bx++) {
-          if (!world.isSolid(bx, by, bz)) continue;
-          if (axis === 0) p.x = d > 0 ? bx - half : bx + 1 + half;
-          else if (axis === 1) p.y = d > 0 ? by - this.height : by + 1;
-          else p.z = d > 0 ? bz - half : bz + 1 + half;
-          return true;
+    // Como cada sub-paso avanza menos de un bloque, lo que ahora se pisa
+    // está en la capa del frente del movimiento: se frena en la cara más
+    // cercana de todo lo que se superpone.
+    let hit = false;
+    let limit = d > 0 ? Infinity : -Infinity;
+    const cell = [0, 0, 0];
+    for (let by = Math.floor(lo[1] + EPS); by <= Math.floor(hi[1] - EPS); by++) {
+      for (let bz = Math.floor(lo[2] + EPS); bz <= Math.floor(hi[2] - EPS); bz++) {
+        for (let bx = Math.floor(lo[0] + EPS); bx <= Math.floor(hi[0] - EPS); bx++) {
+          const boxes = COLLISION_BOXES[world.getBlock(bx, by, bz)];
+          if (!boxes) continue;
+          cell[0] = bx;
+          cell[1] = by;
+          cell[2] = bz;
+          for (const b of boxes) {
+            if (!overlaps(cell, b, lo, hi)) continue;
+            hit = true;
+            limit = d > 0 ? Math.min(limit, cell[axis] + b[axis]) : Math.max(limit, cell[axis] + b[axis + 3]);
+          }
         }
       }
     }
-    return false;
+    if (!hit) return false;
+    if (axis === 0) p.x = d > 0 ? limit - half : limit + half;
+    else if (axis === 1) p.y = d > 0 ? limit - this.height : limit;
+    else p.z = d > 0 ? limit - half : limit + half;
+    return true;
   }
 
-  /** ¿La caja del jugador se superpone con algún bloque sólido? */
+  /** ¿La caja del jugador se superpone con algo sólido? */
   _overlapsSolid(world) {
     const p = this.position;
     const half = this.width / 2;
-    for (let by = Math.floor(p.y + EPS); by <= Math.floor(p.y + this.height - EPS); by++) {
-      for (let bz = Math.floor(p.z - half + EPS); bz <= Math.floor(p.z + half - EPS); bz++) {
-        for (let bx = Math.floor(p.x - half + EPS); bx <= Math.floor(p.x + half - EPS); bx++) {
-          if (world.isSolid(bx, by, bz)) return true;
+    const lo = [p.x - half, p.y, p.z - half];
+    const hi = [p.x + half, p.y + this.height, p.z + half];
+    const cell = [0, 0, 0];
+    for (let by = Math.floor(lo[1] + EPS); by <= Math.floor(hi[1] - EPS); by++) {
+      for (let bz = Math.floor(lo[2] + EPS); bz <= Math.floor(hi[2] - EPS); bz++) {
+        for (let bx = Math.floor(lo[0] + EPS); bx <= Math.floor(hi[0] - EPS); bx++) {
+          const boxes = COLLISION_BOXES[world.getBlock(bx, by, bz)];
+          if (!boxes) continue;
+          cell[0] = bx;
+          cell[1] = by;
+          cell[2] = bz;
+          if (boxes.some((b) => overlaps(cell, b, lo, hi))) return true;
         }
       }
     }
@@ -306,7 +379,18 @@ export class Player {
 
   /** Copia en `out` la posición de los ojos (de donde sale la cámara). */
   getEyePosition(out) {
-    return out.set(this.position.x, this.position.y + this.eyeHeight, this.position.z);
+    return out.set(this.position.x, this.position.y + this.eyeHeight + this._eyeLag, this.position.z);
   }
+}
+
+/**
+ * ¿La caja `b` del bloque en `cell` se superpone con la del jugador (lo,
+ * hi)? Tocarse justo en una cara no cuenta.
+ */
+function overlaps(cell, b, lo, hi) {
+  for (let a = 0; a < 3; a++) {
+    if (cell[a] + b[a] >= hi[a] - EPS || cell[a] + b[a + 3] <= lo[a] + EPS) return false;
+  }
+  return true;
 }
 

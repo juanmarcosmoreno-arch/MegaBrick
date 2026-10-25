@@ -1,6 +1,8 @@
-// Contorno (wireframe) del bloque apuntado.
+// Contorno (wireframe) del bloque apuntado. En una losa, un escalón o una
+// puerta, rodea lo que ocupa (no el bloque entero).
 
 import * as THREE from 'three';
+import { getBlock } from '../world/blocks.js';
 
 const DARK = new THREE.Color(0x101010);
 const LIGHT = new THREE.Color(0xd8e0f0);
@@ -37,13 +39,24 @@ export class BlockOutline {
     this.mesh.material.color.lerpColors(LIGHT, DARK, k);
   }
 
-  /** Muestra el contorno en el bloque (x, y, z), o lo oculta con null. */
+  /** Muestra el contorno en el bloque apuntado ({x, y, z, id}), o lo oculta con null. */
   show(block) {
     if (!block) {
       this.mesh.visible = false;
       return;
     }
     this.mesh.visible = true;
-    this.mesh.position.set(block.x + 0.5, block.y + 0.5, block.z + 0.5);
+    // Lo que ocupan todas sus cajas juntas (un cubo entero si no tiene forma).
+    const lo = [0, 0, 0];
+    const hi = [1, 1, 1];
+    const boxes = getBlock(block.id).boxes;
+    if (boxes) {
+      for (let a = 0; a < 3; a++) {
+        lo[a] = Math.min(...boxes.map((b) => b[a]));
+        hi[a] = Math.max(...boxes.map((b) => b[a + 3]));
+      }
+    }
+    this.mesh.scale.set(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
+    this.mesh.position.set(block.x + (lo[0] + hi[0]) / 2, block.y + (lo[1] + hi[1]) / 2, block.z + (lo[2] + hi[2]) / 2);
   }
 }

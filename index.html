@@ -44,6 +44,7 @@
             <li><kbd>Clic izq.</kbd> romper</li>
             <li><kbd>Clic der.</kbd> poner</li>
             <li><kbd>1</kbd>–<kbd>9</kbd> / rueda: bloque</li>
+            <li><kbd>E</kbd> materiales</li>
             <li><kbd>V</kbd> cámara</li>
             <li><kbd>F3</kbd> coordenadas</li>
             <li><kbd>Esc</kbd> pausa</li>
@@ -57,6 +58,7 @@
             <li><kbd data-pad="RT">RT</kbd> romper</li>
             <li><kbd data-pad="LT">LT</kbd> poner</li>
             <li><kbd data-pad="LB">LB</kbd><kbd data-pad="RB">RB</kbd> bloque</li>
+            <li><kbd data-pad="BACK">Vista</kbd> materiales</li>
             <li><kbd data-pad="X">X</kbd> cámara</li>
             <li><kbd data-pad="START">Menú</kbd> pausa</li>
             <li>En los menús: cruz para elegir, <kbd data-pad="A">A</kbd> aceptar, <kbd data-pad="B">B</kbd> volver</li>
@@ -161,6 +163,20 @@
           <button id="mp-play" class="btn btn-primary" type="button" hidden>Jugar</button>
           <button id="mp-leave" class="btn btn-ghost" type="button" hidden>Salir de la partida</button>
           <button id="mp-back" class="btn btn-ghost" type="button">Volver</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menú de materiales (tecla E, sobre el juego) -->
+    <div id="inventory-panel" class="screen overlay" hidden role="dialog" aria-labelledby="inv-title" aria-modal="true">
+      <div class="panel dialog inventory">
+        <h2 id="inv-title">Materiales</h2>
+        <p class="hint">Elegí una casilla de tu barra y después el material que va en ella.</p>
+        <div id="inv-hotbar" class="inv-hotbar" role="radiogroup" aria-label="Casillas de la barra"></div>
+        <p id="inv-name" class="inv-name" aria-live="polite"></p>
+        <div id="inv-groups" class="inv-groups"></div>
+        <div class="dialog-actions">
+          <button id="inv-done" class="btn btn-primary" type="button">Listo</button>
         </div>
       </div>
     </div>

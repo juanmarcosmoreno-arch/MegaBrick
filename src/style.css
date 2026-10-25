@@ -290,7 +290,7 @@ body {
   width: auto;
   height: auto;
   max-width: min(600px, 52vw);
-  max-height: calc(100vh - 320px);
+  max-height: calc(100vh - 336px);
   min-height: 160px;
   object-fit: contain;
   -webkit-user-drag: none;

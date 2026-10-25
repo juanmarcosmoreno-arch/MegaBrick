@@ -68,7 +68,9 @@ export class MultiplayerMenu {
     this.hostBtn.addEventListener('click', () => this.host());
     this.joinBtn.addEventListener('click', () => this.join());
     this.codeInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') this.join();
+      if (e.key !== 'Enter') return;
+      e.preventDefault(); // que el Enter no apriete también otro botón
+      this.join();
     });
     this.playBtn.addEventListener('click', () => {
       this.close();
@@ -97,6 +99,7 @@ export class MultiplayerMenu {
   }
 
   open() {
+    this._opener = document.activeElement;
     this._setBackgroundInert(true);
     this.panel.hidden = false;
     this.render();
@@ -111,6 +114,9 @@ export class MultiplayerMenu {
     }
     this.panel.hidden = true;
     this._setBackgroundInert(false);
+    // El foco vuelve al botón que lo abrió (con el teclado o el joystick).
+    if (this._opener?.isConnected && !this._opener.disabled) this._opener.focus();
+    this._opener = null;
   }
 
   setStatus(text, isError = false) {

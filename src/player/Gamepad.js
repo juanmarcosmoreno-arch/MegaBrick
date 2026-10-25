@@ -1,7 +1,7 @@
-// Joystick (Gamepad API): se lee una vez por frame el primer joystick
-// conectado. Se usa el mapeo "standard" del navegador, que tienen los
-// joysticks de Xbox y PlayStation: cada botón y palanca está siempre en el
-// mismo lugar, sin configurar nada.
+// Joystick (Gamepad API): se lee una vez por frame. Se usa solo el mapeo
+// "standard" del navegador, que tienen los joysticks de Xbox y PlayStation:
+// cada botón y palanca está siempre en el mismo lugar, sin configurar nada.
+// Con dos joysticks, manda el último en el que se apretó un botón.
 //
 // El navegador muestra el joystick recién cuando se aprieta un botón con la
 // página abierta (por privacidad).
@@ -49,9 +49,11 @@ export class GamepadInput {
     this.move = { x: 0, y: 0 };
     /** Palanca derecha, sin la zona muerta (y positivo = arriba). */
     this.look = { x: 0, y: 0 };
-    /** Se conectó o desconectó en este frame. */
+    /** Se conectó o desconectó en este frame (o se pasó a otro joystick). */
     this.justConnected = false;
     this.justDisconnected = false;
+    this.switched = false;
+    this.index = -1; // el joystick que se usa (índice del navegador)
     this._down = new Set(); // botones apretados ahora
     this._pressed = new Set(); // botones que se apretaron en este frame
     this._ignored = new Set(); // botones que no cuentan hasta soltarlos
@@ -60,15 +62,19 @@ export class GamepadInput {
   /** Lee el joystick. Se llama una vez por frame, antes de usarlo. */
   poll() {
     this._pressed.clear();
-    const pad = findGamepad();
+    const pad = findGamepad(this.index);
     const was = this.connected;
     this.connected = Boolean(pad);
     this.justConnected = this.connected && !was;
     this.justDisconnected = was && !this.connected;
+    this.switched = was && this.connected && pad.index !== this.index;
     if (!pad) {
+      this.index = -1;
       this._release();
       return;
     }
+    if (this.switched) this._release();
+    this.index = pad.index;
     this.id = pad.id;
     for (let i = 0; i < pad.buttons.length; i++) {
       const b = pad.buttons[i];
@@ -123,23 +129,26 @@ export class GamepadInput {
 }
 
 /**
- * El primer joystick conectado, preferentemente uno con el mapeo standard.
- * Puede no haber Gamepad API (o estar bloqueada en la página): null.
+ * El joystick a usar, solo entre los que tienen el mapeo standard (en los
+ * otros, como volantes o palancas de vuelo, cada eje está en otro lado y
+ * algunos en reposo valen 1 o -1: la cámara giraría sola). Sigue con el de
+ * ahora mientras se use; si se aprieta un botón en otro, pasa a ese. Puede
+ * no haber Gamepad API (o estar bloqueada en la página): null.
+ * @param {number} current índice del que se viene usando (-1: ninguno)
  */
-function findGamepad() {
+function findGamepad(current) {
   let pads;
   try {
     pads = navigator.getGamepads?.() ?? [];
   } catch {
     return null;
   }
-  let any = null;
-  for (const pad of pads) {
-    if (!pad?.connected) continue;
-    if (pad.mapping === 'standard') return pad;
-    any ??= pad;
-  }
-  return any;
+  const standard = [...pads].filter((p) => p?.connected && p.mapping === 'standard');
+  const pressed = (p) => p.buttons.some((b) => b.pressed);
+  const now = standard.find((p) => p.index === current);
+  // Con dos que mandan lo mismo (un joystick y su copia virtual), se queda con el de ahora.
+  if (now && pressed(now)) return now;
+  return standard.find(pressed) ?? now ?? standard[0] ?? null;
 }
 
 /**

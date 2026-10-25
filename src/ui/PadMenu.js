@@ -88,19 +88,30 @@ export class PadMenu {
   }
 
   /**
+   * La dirección que viene apretada (por ejemplo, la palanca al pausar)
+   * no cuenta hasta que se suelte.
+   */
+  ignoreHeld() {
+    this._held = this._heldDirection();
+    this._repeat = Infinity;
+  }
+
+  /** La dirección apretada ahora (cruz o palanca izquierda), o null. */
+  _heldDirection() {
+    const pad = this.pad;
+    for (const d of DIRECTIONS) {
+      const stick = d.x ? pad.move.x * d.x : -pad.move.y * d.y;
+      if (pad.isDown(d.button) || stick > STICK_THRESHOLD) return d;
+    }
+    return null;
+  }
+
+  /**
    * La dirección elegida en este frame, con la cruz o la palanca izquierda.
    * Manteniéndola, se repite (primero espera un poco).
    */
   _direction(dt) {
-    const pad = this.pad;
-    let held = null;
-    for (const d of DIRECTIONS) {
-      const stick = d.x ? pad.move.x * d.x : -pad.move.y * d.y;
-      if (pad.isDown(d.button) || stick > STICK_THRESHOLD) {
-        held = d;
-        break;
-      }
-    }
+    const held = this._heldDirection();
     if (held !== this._held) {
       this._held = held;
       this._repeat = REPEAT_DELAY;
@@ -127,20 +138,24 @@ export class PadMenu {
   }
 
   /**
-   * El elemento más cercano en una dirección: se mide desde el centro y se
-   * castiga lo que queda corrido hacia el costado.
+   * El elemento más cercano en una dirección: su centro tiene que quedar
+   * hacia ese lado, y se mide el hueco entre los bordes (no entre centros:
+   * si no, desde un botón ancho se saltea la fila de botones angostos de
+   * abajo). Lo que queda corrido al costado cuenta doble.
    */
   _nearest(layer, from, dir) {
-    const a = center(from);
+    const a = from.getBoundingClientRect();
     let best = null;
     let bestScore = Infinity;
     for (const el of this._candidates(layer)) {
       if (el === from) continue;
-      const b = center(el);
-      const along = (b.x - a.x) * dir.x + (b.y - a.y) * dir.y;
-      if (along <= 1) continue;
-      const aside = Math.abs((b.x - a.x) * dir.y - (b.y - a.y) * dir.x);
-      const score = along + aside * 2;
+      const b = el.getBoundingClientRect();
+      const dx = (b.left + b.right - a.left - a.right) / 2;
+      const dy = (b.top + b.bottom - a.top - a.bottom) / 2;
+      if (dx * dir.x + dy * dir.y <= 1) continue;
+      const gapX = Math.max(0, b.left - a.right, a.left - b.right);
+      const gapY = Math.max(0, b.top - a.bottom, a.top - b.bottom);
+      const score = dir.x ? gapX + gapY * 2 + Math.abs(dy) * 0.1 : gapY + gapX * 2 + Math.abs(dx) * 0.1;
       if (score < bestScore) {
         bestScore = score;
         best = el;
@@ -157,11 +172,6 @@ export class PadMenu {
 /** ¿Se ve? (sin `hidden` en el camino y con tamaño en pantalla) */
 function isVisible(el) {
   return el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
-}
-
-function center(el) {
-  const r = el.getBoundingClientRect();
-  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }
 
 /** Mueve un deslizador un paso y avisa como si se hubiera movido con el mouse. */

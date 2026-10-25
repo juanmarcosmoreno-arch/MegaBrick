@@ -40,6 +40,8 @@ const MAX_DT = 0.1;
 const TITLE_BG = 0x0a0a0a;
 // Cuánto se abre el campo de visión al correr.
 const SPRINT_FOV_FACTOR = 1.12;
+// Aviso de la pausa si se desconecta el joystick (se borra al reconectarlo).
+const PAD_DISCONNECTED = 'Se desconectó el joystick.';
 
 /**
  * Opciones que se pueden elegir en la URL (el resto, en Opciones):
@@ -543,13 +545,17 @@ class Game {
   /** Se conectó o desconectó el joystick: avisos y ayuda de la pantalla de inicio. */
   updatePadConnection() {
     const pad = this.controls.pad;
-    if (!pad.justConnected && !pad.justDisconnected) return;
-    if (pad.justConnected) {
+    if (!pad.justConnected && !pad.justDisconnected && !pad.switched) return;
+    if (pad.justConnected || pad.switched) {
+      // Los nombres de los botones (también si se pasó a otro joystick).
       const labels = pad.labels;
       for (const kbd of this.padHelp.querySelectorAll('[data-pad]')) kbd.textContent = labels[kbd.dataset.pad];
+    }
+    if (pad.justConnected) {
       if (this.state === STATE.PLAYING) this.hud.toast('Joystick conectado', 2);
-    } else if (this.state === STATE.PAUSED) {
-      this.menu.setMessage('Se desconectó el joystick.');
+      else if (this.menu.pauseMsg.textContent === PAD_DISCONNECTED) this.menu.setMessage('');
+    } else if (pad.justDisconnected && this.state === STATE.PAUSED) {
+      this.menu.setMessage(PAD_DISCONNECTED);
     }
     this.padHelp.hidden = !pad.connected;
     this.keysHelp.hidden = pad.connected;
@@ -586,6 +592,8 @@ class Game {
       this.state = STATE.PAUSED;
       this.interaction.release();
       this.menu.showPause();
+      // Si la palanca sigue inclinada, que no mueva el foco de la pausa.
+      this.padMenu.ignoreHeld();
       this.saves.save();
     }
   }

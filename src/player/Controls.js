@@ -60,7 +60,9 @@ export class Controls {
     this._onMouseDown = this._onMouseDown.bind(this);
     this._onMouseUp = this._onMouseUp.bind(this);
     this._onContextMenu = (e) => {
-      if (this.locked) e.preventDefault();
+      // Jugando con el joystick también: el clic derecho que pasa al mouse
+      // llega antes de que el mouse quede capturado.
+      if (this.active) e.preventDefault();
     };
 
     window.addEventListener('keydown', this._onKeyDown);

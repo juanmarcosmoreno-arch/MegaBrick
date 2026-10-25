@@ -73,7 +73,11 @@ export class WorldsMenu {
     $('nw-create').addEventListener('click', create);
     for (const input of [this.nameInput, this.seedInput]) {
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') create();
+        if (e.key !== 'Enter') return;
+        // Sin esto, el mismo Enter "aprieta" el botón que recibe el foco al
+        // cerrarse el panel (Nuevo mundo) y lo vuelve a abrir.
+        e.preventDefault();
+        create();
       });
     }
     // Esc cierra los paneles (aunque el foco haya quedado afuera).

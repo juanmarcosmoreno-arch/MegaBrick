@@ -564,7 +564,9 @@ class Game {
    */
   animalPlayers() {
     const p = this.player.position;
-    const list = [{ id: this.multiplayer.selfId, x: p.x, y: p.y, z: p.z, yaw: this.player.yaw }];
+    // Hacia dónde mira la cámara (de frente, para atrás del personaje).
+    const yaw = this.player.yaw + (this.view.mode === VIEW.FRONT ? Math.PI : 0);
+    const list = [{ id: this.multiplayer.selfId, x: p.x, y: p.y, z: p.z, yaw }];
     if (this.multiplayer.role === 'host') {
       for (const [id, remote] of this.multiplayer.players) {
         const s = remote.lastState;

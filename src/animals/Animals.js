@@ -96,7 +96,7 @@ export class Animals {
       if (this._spawnTimer <= 0) {
         this._spawnTimer = SPAWN_EVERY;
         this._despawn(world, players, viewDistance);
-        this._spawn(world, players);
+        this._spawn(world, players, viewDistance);
       }
       for (const a of this.list.values()) a.update(dt, world, players);
       this._separate(world, dt);
@@ -215,7 +215,7 @@ export class Animals {
   }
 
   /** Hace aparecer un grupo cerca de algún jugador que tenga pocos animales. */
-  _spawn(world, players) {
+  _spawn(world, players, viewDistance) {
     if (this.list.size >= MAX_TOTAL) return;
     for (const pl of players) {
       let near = 0;
@@ -225,8 +225,9 @@ export class Animals {
       const d = rand(SPAWN_MIN, SPAWN_MAX);
       const x = pl.x + Math.sin(angle) * d;
       const z = pl.z + Math.cos(angle) * d;
-      // Donde no se los vea aparecer: no adelante de ningún jugador.
-      if (players.some((other) => inView(other, x, z))) continue;
+      // Donde no se los vea aparecer: no adelante de ningún jugador que
+      // llegue a verlo (más cerca que la niebla).
+      if (players.some((other) => Math.hypot(x - other.x, z - other.z) < viewDistance && inView(other, x, z))) continue;
       const species = randomSpecies();
       const kind = getKind(species);
       const variants = kind.info.variants?.length ?? 1;
@@ -379,7 +380,8 @@ function followNet(a, dt) {
     return;
   }
   a.netAge += dt;
-  const k = Math.min(1, a.netAge / NET_INTERVAL);
+  // Un poco más que NET_INTERVAL: si el dato siguiente se demora un poco, no se frena.
+  const k = Math.min(1, a.netAge / (NET_INTERVAL * 1.25));
   p.x = f.x + (n.x - f.x) * k;
   p.y = f.y + (n.y - f.y) * k;
   p.z = f.z + (n.z - f.z) * k;

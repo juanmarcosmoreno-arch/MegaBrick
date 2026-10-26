@@ -20,6 +20,9 @@ export const info = {
   name: 'Carpincho',
   variants: ['canela', 'marrón', 'con benteveo'],
   size: { width: 0.6, length: 1.15, height: 0.75 },
+  // Lo que ocupa el modelo dibujado (con todas sus animaciones), desde el
+  // centro de las patas: para apuntarle y para que no meta el hocico en las paredes.
+  bounds: { side: 0.4, front: 0.78, back: 0.5, top: 0.87 },
 };
 
 // =============================================================================

@@ -31,6 +31,7 @@ import {
 } from './protocol.js';
 import { RemotePlayer } from '../player/RemotePlayer.js';
 import { REACH } from '../player/Interaction.js';
+import { NET_INTERVAL } from '../animals/Animals.js';
 import { BLOCK } from '../world/blocks.js';
 
 /** Envíos de estado por segundo. */
@@ -55,8 +56,6 @@ const MAX_EDITED_CHUNKS = 20000;
 const HOST_ID = 'h';
 /** Cada cuántos segundos el anfitrión manda la hora del día. */
 const TIME_SYNC_INTERVAL = 5;
-/** Cada cuánto manda el anfitrión los animales (segundos). */
-const ANIMALS_INTERVAL = 0.2;
 /** Acariciar o empujar animales: por segundo y de una vez, por invitado. */
 const ANIMAL_ACT_RATE = 4;
 const ANIMAL_ACT_BURST = 6;
@@ -286,7 +285,7 @@ export class Multiplayer {
       }
       this._animalsTimer -= dt;
       if (this._animalsTimer <= 0 && this.players.size > 0) {
-        this._animalsTimer = ANIMALS_INTERVAL;
+        this._animalsTimer = NET_INTERVAL;
         this._broadcast({ t: MSG.ANIMALS, a: this.game.animals.snapshot() });
       }
     }

@@ -29,6 +29,8 @@ export const info = {
   name: 'Oveja',
   variants: ['blanca', 'crema', 'gris', 'negra'],
   size: { width: 0.7, length: 0.95, height: 0.85 }, // medida: 0,68 × 0,98 × 0,84 en reposo
+  // Lo que ocupa el modelo dibujado (pastando estira el cuello): ver carpincho.js.
+  bounds: { side: 0.35, front: 0.63, back: 0.51, top: 0.9 },
 };
 
 // =============================================================================

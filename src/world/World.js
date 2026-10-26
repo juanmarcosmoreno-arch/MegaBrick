@@ -292,6 +292,12 @@ export class World {
     return this.edits.has(chunkKey(toChunkCoord(x), toChunkCoord(z)));
   }
 
+  /** ¿El bloque (x, y, z) lo puso o lo cambió un jugador? */
+  isEditedAt(x, y, z) {
+    const chunkEdits = this.edits.get(chunkKey(toChunkCoord(x), toChunkCoord(z)));
+    return chunkEdits?.has(Chunk.index(toLocalCoord(x), y, toLocalCoord(z))) ?? false;
+  }
+
   /**
    * Cambios de los jugadores en un formato simple para mandar o guardar:
    * [[clave del chunk, [índice, id, índice, id, ...]], ...].

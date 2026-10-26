@@ -168,7 +168,7 @@ Podés jugar en el mismo mundo con amigos, cada uno desde su computadora:
 **Cómo funciona.**
 - **Conexión:** las computadoras se conectan directo entre sí con WebRTC. Para el primer contacto, que es intercambiar el código, se usa el servidor público y gratuito de [PeerJS](https://peerjs.com/), así que no hace falta un servidor propio y funciona desde GitHub Pages.
 - **Qué viaja por la red:** el terreno no. Cada computadora lo genera con la semilla, y solo viajan las posiciones, los cambios de bloques, la hora (todos ven el mismo cielo) y los animales.
-- **Los animales:** los mueve el anfitrión, también cerca de los invitados, y manda 5 veces por segundo dónde está y qué hace cada uno; los demás los mueven suave hacia ahí. Para acariciar o empujar un animal, el invitado se lo pide al anfitrión, que solo acepta animales cerca de quien los toca y unos pocos por segundo.
+- **Los animales:** los mueve el anfitrión, también cerca de los invitados que andan por la zona que él tiene cargada (lejos de él no hay animales), y manda 5 veces por segundo dónde está y qué hace cada uno; los demás los mueven parejo de un dato al siguiente. Para acariciar o empujar un animal, el invitado se lo pide al anfitrión, que solo acepta animales cerca de quien los toca y unos pocos por segundo.
 - **El anfitrión:** quien crea la partida ordena los cambios para que todos terminen viendo el mismo mundo. También revisa todo lo que mandan los demás, porque un jugador podría usar una versión modificada del juego. No acepta bloques inválidos, ni romper o poner lecho primordial, ni cambios lejos de donde está el jugador. Aplica como mucho 30 cambios por segundo por jugador (con ráfagas de hasta 60). Los que sobran esperan en fila y, si son demasiados, se rechazan y se le devuelve el bloque real a quien los hizo. Las posiciones de más de 30 por segundo se descartan. Los mensajes viajan en formato MsgPack, que no se puede usar para colgar la pestaña de otro con un mensaje armado a propósito.
 
 **Límites.**
@@ -193,11 +193,11 @@ El mundo es infinito y se genera a medida que te movés, en chunks de 16 × 16 b
 
 En el pasto aparecen animales en grupos: **carpinchos** (tranquilos y nadadores; a veces con un benteveo en la cabeza), **ovejas** de lana esponjosa, **gallinas** y **conejos**. Cada especie tiene varias variantes de color.
 
-- **Qué hacen:** pasean, pastan o picotean, se quedan mirando al jugador que está cerca, suben escalones de un bloque saltando, no se tiran de los barrancos y, si caen al agua, flotan y nadan hasta la orilla. Al carpincho le gusta meterse al agua.
-- **Acariciar (clic derecho, o el gatillo izquierdo del joystick):** se pone contento, le salen corazones y te sigue un rato.
-- **Empujar (clic izquierdo, o el gatillo derecho):** da un respingo y sale corriendo para el otro lado. No se lastiman.
+- **Qué hacen:** pasean, pastan o picotean, se quedan mirando al jugador que está cerca, suben escalones de un bloque saltando (las paredes más altas no: se dan vuelta), no se tiran de los barrancos ni se suben a los árboles y, si caen al agua, flotan y nadan hasta la orilla. Al carpincho le gusta meterse al agua. Pasan por las puertas abiertas; las cerradas, los vidrios y las paredes no los atraviesan ni con el hocico.
+- **Acariciar (clic derecho, o el gatillo izquierdo del joystick):** se pone contento, le salen corazones y te sigue un rato. Si acariciás a varios, te siguen en grupo sin encimarse.
+- **Empujar (clic izquierdo, o el gatillo derecho):** da un respingo y sale corriendo para el otro lado. No se lastiman. Se los toca apuntando a cualquier parte del cuerpo; manteniendo el botón después de tocarlo no se rompe ni se pone nada (hay que soltarlo).
 - **Sonidos:** cada especie tiene su voz, hecha con Web Audio como el resto de los sonidos; se escuchan más bajo cuanto más lejos están.
-- **Dónde aparecen:** sobre el césped, a 20–44 bloques del jugador y no justo adelante, hasta 10 cerca de cada jugador. Los que quedan lejos se van. No se guardan con el mundo: cada vez aparecen otros.
+- **Dónde aparecen:** sobre el césped natural (no en el pasto que puso un jugador, como un techo), a 20–44 bloques del jugador y no adelante de él, hasta 10 cerca de cada jugador. Los que quedan lejos se van, pero no mientras alguien los está viendo. No se guardan con el mundo: cada vez aparecen otros.
 - **F3** muestra cuántos animales hay.
 
 ## Ambiente

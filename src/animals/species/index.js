@@ -28,12 +28,12 @@ export const SPECIES_IDS = Object.freeze(Object.keys(KINDS));
 
 const kinds = new Map();
 
-/** Datos de una especie: comportamiento, tamaño (de info.size) y modelo. */
+/** Datos de una especie: comportamiento, tamaño (de info.size y info.bounds) y modelo. */
 export function getKind(id) {
   if (!KINDS[id]) return null;
   if (!kinds.has(id)) {
     const k = KINDS[id];
-    kinds.set(id, Object.freeze({ ...k, size: k.module.info.size, info: k.module.info }));
+    kinds.set(id, Object.freeze({ ...k, size: k.module.info.size, bounds: k.module.info.bounds, info: k.module.info }));
   }
   return kinds.get(id);
 }

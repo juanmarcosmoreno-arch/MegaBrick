@@ -37,6 +37,8 @@ export const info = {
   name: 'Conejo',
   variants: ['gris', 'blanco', 'marrón', 'manchado'],
   size: { width: 0.35, length: 0.5, height: 0.55 }, // orejas incluidas
+  // Lo que ocupa el modelo dibujado: ver carpincho.js.
+  bounds: { side: 0.19, front: 0.33, back: 0.33, top: 0.59 },
 };
 
 // =============================================================================

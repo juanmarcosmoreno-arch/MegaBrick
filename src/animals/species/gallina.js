@@ -31,6 +31,8 @@ export const info = {
   name: 'Gallina',
   variants: ['blanca', 'colorada', 'pinta'],
   size: { width: 0.35, length: 0.45, height: 0.55 },
+  // Lo que ocupa el modelo dibujado: ver carpincho.js.
+  bounds: { side: 0.21, front: 0.36, back: 0.3, top: 0.59 },
 };
 
 // =============================================================================

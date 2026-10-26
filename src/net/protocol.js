@@ -138,7 +138,7 @@ export function cleanEdit(m) {
 
 /**
  * Valida la lista de animales del anfitrión (ver Animals.snapshot): un
- * array por animal con 11 enteros en rango. Los que no cumplen se descartan.
+ * array por animal con 12 enteros en rango. Los que no cumplen se descartan.
  * Devuelve la lista limpia o null.
  */
 export function cleanAnimals(list) {
@@ -146,12 +146,12 @@ export function cleanAnimals(list) {
   const out = [];
   const ints = (a) => a.every(Number.isInteger);
   for (const a of list.slice(0, MAX_ANIMALS)) {
-    if (!Array.isArray(a) || a.length !== 11 || !ints(a)) continue;
-    const [id, sp, variant, x, y, z, yaw, action, lookYaw, lookPitch, speed] = a;
+    if (!Array.isArray(a) || a.length !== 12 || !ints(a)) continue;
+    const [id, sp, variant, x, y, z, yaw, action, lookYaw, lookPitch, speed, pets] = a;
     if (id < 1 || id > 2 ** 31 || sp < 0 || sp >= SPECIES_IDS.length || variant < 0 || variant > 15) continue;
     if (Math.abs(x) > LIMIT * 100 || Math.abs(z) > LIMIT * 100 || y < 0 || y > CHUNK_HEIGHT * 100) continue;
     if (Math.abs(yaw) > 700 || action < 0 || action >= ACTIONS.length) continue;
-    if (Math.abs(lookYaw) > 300 || Math.abs(lookPitch) > 300 || speed < 0 || speed > 300) continue;
+    if (Math.abs(lookYaw) > 300 || Math.abs(lookPitch) > 300 || speed < 0 || speed > 300 || pets < 0 || pets > 255) continue;
     out.push(a);
   }
   return out;

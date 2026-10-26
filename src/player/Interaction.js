@@ -67,6 +67,10 @@ export class BlockInteraction {
     this._mining = null; // bloque que se está rompiendo: "x,y,z,id"
     this._mineTime = 0; // segundos que lleva
     this._hitTimer = 0;
+    // Después de acariciar o empujar un animal no se rompe ni se pone nada
+    // hasta soltar los botones (si no, al irse el animal, se rompería el
+    // bloque de atrás).
+    this._afterAnimal = false;
     /** Cuánto falta para romperlo, de 0 a 1 (para las grietas). */
     this.breakProgress = 0;
     this._eye = new THREE.Vector3();
@@ -102,9 +106,23 @@ export class BlockInteraction {
       this._breaking = false;
       this._stopMining();
       this.outline.show(null);
-      if (controls.wasClicked(2) || pad.wasPressed(PAD.LT)) this.onAnimal?.('pet', this.animalTarget);
-      else if (controls.wasClicked(0) || pad.wasPressed(PAD.RT)) this.onAnimal?.('poke', this.animalTarget);
+      let act = null;
+      if (controls.wasClicked(2) || pad.wasPressed(PAD.LT)) act = 'pet';
+      else if (controls.wasClicked(0) || pad.wasPressed(PAD.RT)) act = 'poke';
+      if (act) {
+        this._afterAnimal = true;
+        this.onAnimal?.(act, this.animalTarget);
+      }
       return;
+    }
+    if (this._afterAnimal) {
+      const held = controls.isMouseDown(0) || controls.isMouseDown(2) || pad.isDown(PAD.RT) || pad.isDown(PAD.LT);
+      if (held) {
+        this._breaking = false;
+        this.outline.show(this.target);
+        return;
+      }
+      this._afterAnimal = false;
     }
 
     // Romper: mantener el botón el tiempo que resiste el bloque.

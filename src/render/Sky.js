@@ -282,6 +282,11 @@ export class Sky {
     this._applyFog();
   }
 
+  /** Hasta dónde se ve (donde la niebla ya tapa todo), en bloques. */
+  get viewDistance() {
+    return this._fogRange.far;
+  }
+
   /** Cambia entre la niebla normal y la de "bajo el agua" (azul y cercana). */
   setUnderwater(on) {
     if (on === this.underwater) return;

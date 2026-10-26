@@ -559,7 +559,8 @@ class Game {
   /**
    * Jugadores alrededor de los que hay animales (el primero, este): para que
    * aparezcan cerca, miren y sigan a quien los acarició. El anfitrión también
-   * los hace aparecer cerca de los invitados.
+   * los hace aparecer cerca de los invitados (dentro de lo que él tiene
+   * cargado: lejos de él no hay animales).
    */
   animalPlayers() {
     const p = this.player.position;
@@ -567,7 +568,7 @@ class Game {
     if (this.multiplayer.role === 'host') {
       for (const [id, remote] of this.multiplayer.players) {
         const s = remote.lastState;
-        if (s) list.push({ id, x: s.x, y: s.y, z: s.z });
+        if (s) list.push({ id, x: s.x, y: s.y, z: s.z, yaw: s.yaw });
       }
     }
     return list;
@@ -841,6 +842,7 @@ class Game {
         players: this.animalPlayers(),
         simulate: this.state === STATE.PLAYING || this.multiplayer.active,
         camera: this.camera,
+        viewDistance: this.sky.viewDistance,
       });
     }
 

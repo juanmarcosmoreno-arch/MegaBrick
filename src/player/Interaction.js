@@ -63,6 +63,7 @@ export class BlockInteraction {
     this.target = null; // bloque apuntado (o null)
     this.animalTarget = null; // animal apuntado (o null)
     this._placeTimer = 0;
+    this._placeHeld = false; // se abrió o cerró una puerta: no repetir hasta soltar
     this._breaking = false;
     this._mining = null; // bloque que se está rompiendo: "x,y,z,id"
     this._mineTime = 0; // segundos que lleva
@@ -128,11 +129,17 @@ export class BlockInteraction {
     // Romper: mantener el botón el tiempo que resiste el bloque.
     this._breaking = controls.isMouseDown(0) || pad.isDown(PAD.RT) || controls.wasClicked(0) || pad.wasPressed(PAD.RT);
     let changed = this._mine(dt);
-    // Poner: al apretar actúa enseguida; si se mantiene, repite cada REPEAT segundos.
+    // Poner: al apretar actúa enseguida; si se mantiene, repite cada REPEAT
+    // segundos. Una puerta se abre o se cierra solo al apretar: manteniendo
+    // el botón no aletea ni pone bloques del otro lado (hasta soltarlo).
     const placing = controls.isMouseDown(2) || pad.isDown(PAD.LT);
-    if (controls.wasClicked(2) || pad.wasPressed(PAD.LT) || (placing && this._placeTimer <= 0)) {
+    if (!placing) this._placeHeld = false;
+    const pressed = controls.wasClicked(2) || pad.wasPressed(PAD.LT);
+    if (pressed || (placing && !this._placeHeld && this._placeTimer <= 0)) {
       this._placeTimer = REPEAT;
-      changed = this.placeAtTarget() || changed;
+      const onDoor = this.target && getBlock(this.target.id).shape === SHAPE.DOOR;
+      if (onDoor) this._placeHeld = true;
+      if (pressed || !onDoor) changed = this.placeAtTarget() || changed;
     }
     // Si el mundo cambió, el contorno va sobre el bloque que quedó apuntado.
     if (changed) this.target = raycast(this.world, this._eye, this._dir, REACH, isTarget);
@@ -272,13 +279,16 @@ export class BlockInteraction {
   /** Abre o cierra la puerta apuntada (las dos mitades). */
   _toggleDoor(t) {
     const door = getBlock(t.id);
-    const toggled = (b) => b.doorIds[`${b.facing}${b.open ? 0 : 1}${b.upper ? 1 : 0}`];
-    const next = toggled(door);
-    // Al cerrarla no puede quedar adentro del jugador.
-    if (this._intersectsPlayer(t.x, t.y, t.z, next)) return false;
+    // Las dos mitades quedan en el mismo estado: el contrario de la apuntada.
+    const idFor = (upper) => door.doorIds[`${door.facing}${door.open ? 0 : 1}${upper ? 1 : 0}`];
+    const next = idFor(door.upper);
     const partner = doorPartner(this.world, t.x, t.y, t.z, t.id);
+    const partnerNext = idFor(!door.upper);
+    // Al cerrarla, ninguna de las dos mitades puede quedar adentro del jugador.
+    if (this._intersectsPlayer(t.x, t.y, t.z, next)) return false;
+    if (partner && this._intersectsPlayer(t.x, partner.y, t.z, partnerNext)) return false;
     if (!this.world.editBlock(t.x, t.y, t.z, next)) return false;
-    if (partner) this.world.editBlock(t.x, partner.y, t.z, toggled(getBlock(partner.id)));
+    if (partner) this.world.editBlock(t.x, partner.y, t.z, partnerNext);
     this.onAction?.('place', t.id);
     return true;
   }

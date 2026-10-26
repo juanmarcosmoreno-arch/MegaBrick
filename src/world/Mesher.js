@@ -128,6 +128,17 @@ for (const block of BLOCKS) {
   FACES.forEach((face, f) => FACE_UVS.set(tileUV(block.tiles[face.tile]), block.id * 24 + f * 4));
 }
 
+/**
+ * Caras con la textura espejada: la de atrás de las puertas, así el picaporte
+ * queda del lado opuesto a la bisagra mirada de los dos lados.
+ * [id * 6 + cara]. Cara de cada dirección (norte, este, sur, oeste) en FACES.
+ */
+const FLIP_U = new Uint8Array(MAX_ID * 6);
+const FACE_OF_DIR = [4, 1, 5, 0];
+for (const block of BLOCKS) {
+  if (block?.shape === 'door') FLIP_U[block.id * 6 + FACE_OF_DIR[(block.facing + (block.open ? 1 : 0)) % 4]] = 1;
+}
+
 /** Esquinas de cada cara (0 o 1 en cada eje): [cara * 12 + esquina * 3 + (x, y, z)]. */
 const CORNERS = new Uint8Array(6 * 12);
 const NORMALS = new Float32Array(6 * 3);
@@ -296,7 +307,7 @@ function emitFace(buf, pad, f, id, x, y, z, pi, box) {
   const ny = NORMALS[f * 3 + 1];
   const nz = NORMALS[f * 3 + 2];
   const ua = UV_AXES[f * 4];
-  const uFlip = UV_AXES[f * 4 + 1];
+  const uFlip = UV_AXES[f * 4 + 1] ^ FLIP_U[id * 6 + f];
   const va = UV_AXES[f * 4 + 2];
   const vFlip = UV_AXES[f * 4 + 3];
   for (let c = 0; c < 4; c++) {
@@ -382,6 +393,7 @@ export function buildChunkMesh(data, neighbors = {}, maxY = CHUNK_HEIGHT - 1) {
 export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
   for (const l of LAYERS) l.vertexCount = 0;
   const waterBox = new Float32Array([0, 0, 0, 1, WATER_SURFACE, 1]);
+  const shifted = new Float32Array(6);
   const neighbor = new Uint8Array(6); // -X, +X, -Y, +Y, -Z, +Z (orden de FACES)
   const lastY = CHUNK_HEIGHT - 1;
   const top = Math.min(lastY, maxY);
@@ -436,6 +448,16 @@ export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
           for (let f = 0; f < 6; f++) {
             if ((f === 3 && lowered) || faceVisible(id, neighbor[f])) {
               emitFace(buf, pad, f, id, x, y, z, pi, box);
+            } else if (lowered && f !== 2 && SHAPE_BOXES[neighbor[f]]) {
+              // Agua de la superficie contra una losa, escalón o puerta: la
+              // forma no tapa toda la cara. Se dibuja apenas corrida hacia
+              // adentro de la forma, así las caras de la forma quedan
+              // adelante (no parpadean) y no queda un hueco sin agua.
+              shifted.set(box);
+              const axis = f >> 1;
+              if (f & 1) shifted[axis + 3] += 0.002;
+              else shifted[axis] -= 0.002;
+              emitFace(buf, pad, f, id, x, y, z, pi, shifted);
             }
           }
         }

@@ -4,6 +4,7 @@
 // detrás hay un bloque sólido, para no quedar "adentro" de una pared.
 
 import * as THREE from 'three';
+import { COLLISION_BOXES } from '../world/blocks.js';
 
 export const VIEW = Object.freeze({
   FIRST: 0, // primera persona
@@ -119,9 +120,20 @@ export class ViewCamera {
   _blockedNear(world, p) {
     const m = WALL_MARGIN;
     for (const [dx, dy, dz] of PROBE_OFFSETS) {
-      if (world.isSolid(Math.floor(p.x + dx * m), Math.floor(p.y + dy * m), Math.floor(p.z + dz * m))) {
-        return true;
-      }
+      const x = p.x + dx * m;
+      const y = p.y + dy * m;
+      const z = p.z + dz * m;
+      if (y < 0) return true;
+      const bx = Math.floor(x);
+      const by = Math.floor(y);
+      const bz = Math.floor(z);
+      // Con las cajas de choque: una puerta abierta o una losa no tapan la celda entera.
+      const boxes = COLLISION_BOXES[world.getBlock(bx, by, bz)];
+      if (!boxes) continue;
+      const lx = x - bx;
+      const ly = y - by;
+      const lz = z - bz;
+      if (boxes.some((b) => lx >= b[0] && lx <= b[3] && ly >= b[1] && ly <= b[4] && lz >= b[2] && lz <= b[5])) return true;
     }
     return false;
   }

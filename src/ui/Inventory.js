@@ -28,6 +28,11 @@ export class Inventory {
     this.groupsEl = document.getElementById('inv-groups');
     this._buildSlots();
     this._buildGroups();
+    // Si hay más grupos abajo (ventana chica), el borde de abajo se esfuma:
+    // así se nota que sigue (en Mac la barra de desplazamiento está oculta).
+    const more = () => this._updateMore();
+    this.groupsEl.addEventListener('scroll', more, { passive: true });
+    window.addEventListener('resize', () => this.isOpen && more());
     document.getElementById('inv-done').addEventListener('click', () => this.onClose(true));
     document.addEventListener('keydown', (e) => {
       // Manteniendo E apretada (la que lo abrió), no se cierra solo.
@@ -55,6 +60,12 @@ export class Inventory {
     // El foco en el material que está en la casilla elegida (o el primero).
     const current = this.groupsEl.querySelector(`[data-id="${this.hotbar.selectedBlock}"]`);
     (current ?? this.groupsEl.querySelector('button'))?.focus({ preventScroll: false });
+    this._updateMore();
+  }
+
+  _updateMore() {
+    const el = this.groupsEl;
+    el.classList.toggle('more-below', el.scrollTop + el.clientHeight < el.scrollHeight - 4);
   }
 
   close() {

@@ -65,7 +65,8 @@ export class Inventory {
 
   _updateMore() {
     const el = this.groupsEl;
-    el.classList.toggle('more-below', el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+    // Con margen para el relleno de abajo (6 px): al final del todo no queda esfumado.
+    el.classList.toggle('more-below', el.scrollTop + el.clientHeight < el.scrollHeight - 8);
   }
 
   close() {

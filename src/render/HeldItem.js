@@ -31,6 +31,7 @@ export class HeldItem {
     camera.add(this.mesh);
     this.camera = camera;
     this._swing = 0;
+    this._queued = false;
     this._bob = 0;
   }
 
@@ -42,9 +43,14 @@ export class HeldItem {
     this.mesh.visible = visible;
   }
 
-  /** Dispara la animación de usar el bloque (romper o poner). */
+  /**
+   * Dispara la animación de usar el bloque (romper o poner). Si ya se está
+   * balanceando, el siguiente espera a que termine (como la pinza de coco):
+   * así no salta a mitad de camino.
+   */
   swing() {
-    this._swing = SWING_TIME;
+    if (this._swing > 0) this._queued = true;
+    else this._swing = SWING_TIME;
   }
 
   /**
@@ -55,6 +61,10 @@ export class HeldItem {
     this._bob += dt * speed * 1.8;
     const bobAmount = Math.min(speed / 4.3, 1.3) * 0.025;
     this._swing = Math.max(0, this._swing - dt);
+    if (this._swing === 0 && this._queued) {
+      this._queued = false;
+      this._swing = SWING_TIME;
+    }
     const s = this._swing > 0 ? Math.sin((1 - this._swing / SWING_TIME) * Math.PI) : 0;
     // En ventanas angostas o verticales, acercarlo al centro para que entre.
     const halfWidth =

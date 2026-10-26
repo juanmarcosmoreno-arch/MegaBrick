@@ -69,6 +69,49 @@ function crackTexture() {
   return texture;
 }
 
+/** Cuánto sobresalen las grietas de cada cara (para no pisarse con ella). */
+const CRACK_GAP = 0.001;
+const crackGeometries = new Map();
+
+/**
+ * Las grietas de un bloque: una caja apenas más grande por cada caja de su
+ * forma (en un escalón no quedan grietas en el aire), con la textura según
+ * el lugar en el bloque, como sus caras (en una losa no se aplasta).
+ */
+function crackGeometry(id) {
+  let geometry = crackGeometries.get(id);
+  if (geometry) return geometry;
+  const position = [];
+  const uv = [];
+  const index = [];
+  const clamp = (v) => Math.min(1, Math.max(0, v));
+  for (const [x0, y0, z0, x1, y1, z1] of getBlock(id).boxes ?? [[0, 0, 0, 1, 1, 1]]) {
+    const box = new THREE.BoxGeometry(x1 - x0 + 2 * CRACK_GAP, y1 - y0 + 2 * CRACK_GAP, z1 - z0 + 2 * CRACK_GAP);
+    box.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    const pos = box.attributes.position;
+    const nor = box.attributes.normal;
+    const first = position.length / 3;
+    for (let i = 0; i < pos.count; i++) {
+      const x = clamp(pos.getX(i));
+      const y = clamp(pos.getY(i));
+      const z = clamp(pos.getZ(i));
+      position.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+      // Igual que BoxGeometry en un cubo entero.
+      if (nor.getX(i) !== 0) uv.push(nor.getX(i) > 0 ? 1 - z : z, y);
+      else if (nor.getY(i) !== 0) uv.push(x, nor.getY(i) > 0 ? 1 - z : z);
+      else uv.push(nor.getZ(i) > 0 ? x : 1 - x, y);
+    }
+    for (let i = 0; i < box.index.count; i++) index.push(first + box.index.getX(i));
+    box.dispose();
+  }
+  geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geometry.setIndex(index);
+  crackGeometries.set(id, geometry);
+  return geometry;
+}
+
 export class BlockOutline {
   constructor(scene) {
     // Un poco más grande que el bloque, para que no se pise con sus caras.
@@ -91,10 +134,11 @@ export class BlockOutline {
     this.mesh.renderOrder = 2; // después del agua
     scene.add(this.mesh);
 
-    // Grietas: una caja apenas más grande que el bloque, con la etapa que
-    // corresponde (se corre la textura de a una etapa).
+    // Grietas: cajas apenas más grandes que las del bloque (ver
+    // crackGeometry), con la etapa que corresponde (se corre la textura de a
+    // una etapa).
     this.crack = new THREE.Mesh(
-      new THREE.BoxGeometry(1.002, 1.002, 1.002),
+      crackGeometry(0),
       new THREE.MeshBasicMaterial({
         map: crackTexture(),
         transparent: true,
@@ -142,8 +186,8 @@ export class BlockOutline {
     this.mesh.scale.set(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
     this.mesh.position.set(block.x + (lo[0] + hi[0]) / 2, block.y + (lo[1] + hi[1]) / 2, block.z + (lo[2] + hi[2]) / 2);
     if (this.crack.visible) {
-      this.crack.scale.copy(this.mesh.scale);
-      this.crack.position.copy(this.mesh.position);
+      this.crack.geometry = crackGeometry(block.id);
+      this.crack.position.set(block.x, block.y, block.z);
       const stage = Math.min(CRACK_STAGES - 1, Math.floor(progress * CRACK_STAGES));
       this.crack.material.map.offset.x = stage / CRACK_STAGES;
     }

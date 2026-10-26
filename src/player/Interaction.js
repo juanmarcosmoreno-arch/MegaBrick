@@ -153,6 +153,11 @@ export class BlockInteraction {
   _mine(dt) {
     const t = this.target;
     const block = t && getBlock(t.id);
+    // Los golpes siguen su ritmo mientras se mantiene el botón, aunque cambie
+    // el bloque apuntado (si no, moviendo la mira sonarían seguidos); al
+    // apretar, el primero suena enseguida.
+    if (this._breaking) this._hitTimer -= dt;
+    else this._hitTimer = 0;
     if (!this._breaking || !block?.breakable) {
       this._stopMining();
       return false;
@@ -162,10 +167,8 @@ export class BlockInteraction {
       // Otro bloque (o recién se aprieta): se empieza de cero.
       this._mining = key;
       this._mineTime = 0;
-      this._hitTimer = 0;
     }
     this._mineTime += dt;
-    this._hitTimer -= dt;
     if (this._hitTimer <= 0) {
       this._hitTimer = HIT_EVERY;
       this.onAction?.('hit', t.id);
@@ -173,19 +176,21 @@ export class BlockInteraction {
     this.breakProgress = Math.min(1, this._mineTime / block.hardness);
     if (this._mineTime < block.hardness) return false;
     this._stopMining();
+    // El ruido de romper hace de golpe: el siguiente, un rato después.
+    this._hitTimer = HIT_EVERY;
     return this.breakTarget();
   }
 
   _stopMining() {
     this._mining = null;
     this._mineTime = 0;
-    this._hitTimer = 0;
     this.breakProgress = 0;
   }
 
   /** Deja de "romper" (por ejemplo, al pausar con el botón apretado). */
   release() {
     this._breaking = false;
+    this._hitTimer = 0;
     this._stopMining();
   }
 

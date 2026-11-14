@@ -1,6 +1,6 @@
 // Datos de un chunk: una columna de 16 x 128 x 16 bloques.
 //
-// Los bloques se guardan como IDs en un Uint8Array (0 = aire). El índice
+// Los bloques se guardan como IDs en un Uint16Array (0 = aire). El índice
 // lineal es x + z*16 + y*256: las capas horizontales quedan contiguas, lo
 // que hace rápido recorrer el chunk de abajo hacia arriba.
 
@@ -14,13 +14,13 @@ export class Chunk {
   /**
    * @param {number} cx coordenada X del chunk (en chunks, no en bloques)
    * @param {number} cz coordenada Z del chunk
-   * @param {Uint8Array} [data] datos ya generados (opcional)
+   * @param {Uint16Array} [data] datos ya generados (opcional)
    * @param {number} [maxY] altura del bloque no-aire más alto (si se conoce)
    */
   constructor(cx, cz, data, maxY = CHUNK_HEIGHT - 1) {
     this.cx = cx;
     this.cz = cz;
-    this.data = data ?? new Uint8Array(CHUNK_VOLUME);
+    this.data = data ?? new Uint16Array(CHUNK_VOLUME);
     if (this.data.length !== CHUNK_VOLUME) {
       throw new Error(`Datos de chunk con tamaño inválido: ${this.data.length}`);
     }

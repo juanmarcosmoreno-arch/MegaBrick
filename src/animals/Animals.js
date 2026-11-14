@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { ACTIONS, Animal, groundBelow } from './Animal.js';
 import { SPECIES_IDS, getKind, randomSpecies } from './species/index.js';
-import { BLOCK } from '../world/blocks.js';
+import { BLOCK, SHAPE, getBlock } from '../world/blocks.js';
 import { CHUNK_HEIGHT } from '../world/Chunk.js';
 import { moveAxis } from '../world/collision.js';
 
@@ -410,7 +410,8 @@ function grassAt(world, x, z) {
   const bz = Math.floor(z);
   for (let y = CHUNK_HEIGHT - 1; y > 0; y--) {
     const id = world.getBlock(bx, y, bz);
-    if (id === BLOCK.AIR) continue;
+    // Las plantas (pasto alto, flores) se atraviesan: cuenta lo de abajo.
+    if (id === BLOCK.AIR || getBlock(id).shape === SHAPE.PLANT) continue;
     if (id !== BLOCK.GRASS || world.isEditedAt(bx, y, bz)) return null;
     return groundBelow(world, x, y + 0.5, z, 1)?.y ?? null;
   }

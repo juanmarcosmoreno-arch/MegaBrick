@@ -12,6 +12,9 @@ import {
   TILE_SIZE,
   tilePixelOrigin,
 } from './atlasLayout.js';
+import naturaleza from './tiles/naturaleza.js';
+import arboles from './tiles/arboles.js';
+import construccion from './tiles/construccion.js';
 
 const S = TILE_SIZE;
 
@@ -1110,6 +1113,28 @@ const PAINTERS = {
   },
 };
 
+/**
+ * Herramientas y paleta para los pintores de otros archivos (render/tiles/):
+ * cada uno es una función que recibe esto y devuelve sus pintores.
+ */
+const TOOLS = Object.freeze({
+  S,
+  C,
+  TRANSPARENT,
+  wrap,
+  tone,
+  lift,
+  mix,
+  tileNoise,
+  paintOre,
+  paintBoards,
+  paintPlaster,
+  paintPane,
+  paintHandle,
+  PAINTERS,
+});
+for (const group of [naturaleza, arboles, construccion]) Object.assign(PAINTERS, group(TOOLS));
+
 // ---------------------------------------------------------------------------
 // Atlas
 // ---------------------------------------------------------------------------
@@ -1136,6 +1161,21 @@ function extrudeEdges(img, ox, oy) {
       d[dst + 3] = d[src + 3];
     }
   }
+}
+
+/**
+ * Pinta algunas texturas en una tira (sin DOM, para probarlas en Node):
+ * devuelve {width, height, data} con los píxeles RGBA, una al lado de otra.
+ */
+export function paintTileSheet(names) {
+  const width = names.length * S;
+  const img = { width, height: S, data: new Uint8ClampedArray(width * S * 4) };
+  names.forEach((name, i) => {
+    const painter = PAINTERS[name];
+    if (!painter) throw new Error(`Falta el pintor de la textura: ${name}`);
+    painter(new TilePainter(img, i * S, 0, mulberry32(hashString(name))));
+  });
+  return img;
 }
 
 /** Dibuja todas las texturas en un canvas y lo devuelve. */

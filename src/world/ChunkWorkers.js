@@ -12,7 +12,7 @@ import { PADDED_SIZE } from './Mesher.js';
 /** Trabajos encargados a la vez por worker. */
 const JOBS_PER_WORKER = 2;
 
-/** Copias con borde guardadas para reusar (cada una, 42 KB). */
+/** Copias con borde guardadas para reusar (cada una, 84 KB). */
 const MAX_SPARE_BUFFERS = 12;
 
 export class ChunkWorkers {
@@ -65,7 +65,7 @@ export class ChunkWorkers {
 
   /** Una copia con borde para mallar (reusada si hay). */
   takeBuffer() {
-    return this._spare.pop() ?? new Uint8Array(PADDED_SIZE);
+    return this._spare.pop() ?? new Uint16Array(PADDED_SIZE);
   }
 
   /** Devuelve una copia con borde para reusar. */

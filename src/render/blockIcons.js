@@ -1,11 +1,13 @@
 // Íconos de bloques para la hotbar y el menú de materiales: un cubo en
 // perspectiva isométrica dibujado en un canvas con las texturas del atlas
 // (arriba, izquierda y derecha, con las caras de los costados un poco más
-// oscuras). Las losas y los escalones se dibujan con sus cajas, y las
-// puertas de frente (las dos mitades).
+// oscuras). Las losas, escalones y cercos se dibujan con sus cajas, las
+// puertas de frente (las dos mitades) y las plantas, rejas y escaleras de
+// mano, planas.
 
 import { TILE_SIZE, tilePixelOrigin } from './atlasLayout.js';
 import { SHAPE, getBlock } from '../world/blocks.js';
+import { connectedBoxes, isConnected } from '../world/shapes.js';
 
 const SIZE = 48; // ancho del ícono en píxeles
 const K = SIZE / 2 / TILE_SIZE; // escala de la textura
@@ -68,6 +70,14 @@ function drawDoor(ctx, atlas, block) {
   }
 }
 
+/** La textura plana, de frente (plantas, rejas, escalera de mano). */
+function drawFlat(ctx, atlas, block) {
+  const o = tilePixelOrigin(block.tiles.side);
+  const w = SIZE * 0.8;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(atlas, o.x, o.y, TILE_SIZE, TILE_SIZE, (SIZE - w) / 2, 2 + (SIZE - w) / 2, w, w);
+}
+
 /**
  * Devuelve la URL (data:) del ícono de un bloque.
  * @param {HTMLCanvasElement} atlas canvas del atlas de texturas
@@ -83,9 +93,13 @@ export function getBlockIcon(atlas, id) {
   const ctx = canvas.getContext('2d');
   if (block.shape === SHAPE.DOOR) {
     drawDoor(ctx, atlas, block);
-  } else if (block.boxes) {
+  } else if (block.icon === 'flat') {
+    drawFlat(ctx, atlas, block);
+  } else if (block.boxes || isConnected(id)) {
+    // Un cerco, como un tramo unido al este y al oeste.
+    const own = isConnected(id) ? connectedBoxes(id, 2 | 8) : block.boxes;
     // De abajo hacia arriba y de atrás hacia adelante.
-    const boxes = [...block.boxes].sort((a, b) => a[1] - b[1] || a[0] + a[2] - (b[0] + b[2]));
+    const boxes = [...own].sort((a, b) => a[1] - b[1] || a[0] + a[2] - (b[0] + b[2]));
     for (const box of boxes) drawBox(ctx, atlas, block.tiles, box);
   } else if (block.tiles) {
     const h = SIZE / 4; // alto del rombo de arriba hasta su centro

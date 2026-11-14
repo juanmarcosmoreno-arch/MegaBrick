@@ -16,8 +16,11 @@
 //
 // Los bloques con forma (losas, escalones, puertas) se dibujan con sus cajas:
 // cada caja con sus 6 caras y la textura recortada a su tamaño (no estirada).
+// Los cercos y paneles, con las cajas que corresponden a sus vecinos; las
+// plantas, con dos planos cruzados en X.
 
-import { BLOCK, BLOCKS, LAYER } from './blocks.js';
+import { BLOCK, BLOCKS, LAYER, MAX_BLOCK_IDS, SHAPE } from './blocks.js';
+import { connectedBoxes, isConnected, maskOf } from './shapes.js';
 import { CHUNK_HEIGHT, CHUNK_SIZE } from './Chunk.js';
 import { tileUV } from '../render/atlasLayout.js';
 
@@ -104,7 +107,7 @@ const FACES = [
 // Tablas precalculadas (todo en arrays tipados para que el bucle sea rápido)
 // ---------------------------------------------------------------------------
 
-const MAX_ID = 256;
+const MAX_ID = MAX_BLOCK_IDS;
 /** Propiedades de cada ID de bloque. */
 const OPAQUE = new Uint8Array(MAX_ID);
 const LAYER_OF = new Int8Array(MAX_ID).fill(-1); // -1 = no se dibuja (aire)
@@ -116,6 +119,10 @@ const NO_SHADE = new Uint8Array(MAX_ID);
 const FACE_UVS = new Float32Array(MAX_ID * 24);
 /** Cajas de los bloques con forma (null para los cubos). */
 const SHAPE_BOXES = new Array(MAX_ID).fill(null);
+/** Cercos y paneles: sus cajas para cada máscara de vecinos (ver shapes.js). */
+const CONNECTED_BOXES = new Array(MAX_ID).fill(null);
+/** Plantas (dos planos cruzados). */
+const PLANT = new Uint8Array(MAX_ID);
 for (const block of BLOCKS) {
   if (!block) continue;
   OPAQUE[block.id] = block.opaque ? 1 : 0;
@@ -124,6 +131,13 @@ for (const block of BLOCKS) {
   LIQUID[block.id] = block.liquid ? 1 : 0;
   NO_SHADE[block.id] = block.liquid || block.layer === LAYER.GLOW ? 1 : 0;
   if (block.boxes) SHAPE_BOXES[block.id] = block.boxes.map((b) => Float32Array.from(b));
+  if (isConnected(block.id)) {
+    CONNECTED_BOXES[block.id] = [];
+    for (let mask = 0; mask < 16; mask++) {
+      CONNECTED_BOXES[block.id].push(connectedBoxes(block.id, mask).map((b) => Float32Array.from(b)));
+    }
+  }
+  PLANT[block.id] = block.shape === SHAPE.PLANT ? 1 : 0;
   if (!block.tiles) continue;
   FACES.forEach((face, f) => FACE_UVS.set(tileUV(block.tiles[face.tile]), block.id * 24 + f * 4));
 }
@@ -174,10 +188,10 @@ const FULL_BOX = new Float32Array([0, 0, 0, 1, 1, 1]);
 const PAD_W = CHUNK_SIZE + 2; // 18
 const PAD_AREA = PAD_W * PAD_W; // 324
 const PAD_H = CHUNK_HEIGHT + 2; // y de -1 a 128
-/** Tamaño de la copia con borde (bytes). */
+/** Tamaño de la copia con borde (cantidad de bloques). */
 export const PADDED_SIZE = PAD_AREA * PAD_H;
 /** Copia que usa el mallado en este hilo (buildChunkMesh). */
-const padded = new Uint8Array(PADDED_SIZE);
+const padded = new Uint16Array(PADDED_SIZE);
 /** Índice en la copia con borde de (x, y, z) locales (de -1 a 16 / 128). */
 const padIndex = (x, y, z) => x + 1 + (z + 1) * PAD_W + (y + 1) * PAD_AREA;
 /** Desplazamiento en la copia para moverse (dx, dy, dz). */
@@ -215,9 +229,9 @@ const AO_LIGHT = new Float32Array([0.5, 0.67, 0.84, 1]);
  * Copia el chunk y el borde de sus vecinos en `out` (lo que falta cuenta
  * como aire). Es lo único que necesita el mallado: el hilo principal arma la
  * copia (es rápido) y se la pasa al worker sin copiar los 9 chunks enteros.
- * @param {Uint8Array} data bloques del chunk
+ * @param {Uint16Array} data bloques del chunk
  * @param {object} n vecinos (ver buildChunkMesh)
- * @param {Uint8Array} out de PADDED_SIZE bytes
+ * @param {Uint16Array} out de PADDED_SIZE bloques
  */
 export function padChunk(data, n, out) {
   out.fill(BLOCK.AIR);
@@ -345,6 +359,54 @@ function emitFace(buf, pad, f, id, x, y, z, pi, box) {
   for (let c = 0; c < 4; c++) L[b + c] = AO_LIGHT[L[b + c]];
 }
 
+/** Esquinas de los dos planos de una planta (en X, apenas adentro del bloque). */
+const PLANT_LO = 0.15;
+const PLANT_HI = 0.85;
+const PLANT_PLANES = [
+  [PLANT_LO, PLANT_LO, PLANT_HI, PLANT_HI],
+  [PLANT_LO, PLANT_HI, PLANT_HI, PLANT_LO],
+];
+
+/**
+ * Agrega una planta: dos planos cruzados con la textura entera, cada uno de
+ * los dos lados (el material recortado dibuja solo el frente). Sin sombra
+ * y con la normal hacia arriba, así se ilumina pareja de cualquier lado.
+ */
+function emitPlant(buf, id, x, y, z) {
+  const uvBase = id * 24; // la textura de costado
+  const u0 = FACE_UVS[uvBase];
+  const v0 = FACE_UVS[uvBase + 1];
+  const u1 = FACE_UVS[uvBase + 2];
+  const v1 = FACE_UVS[uvBase + 3];
+  for (const [ax, az, bx, bz] of PLANT_PLANES) {
+    for (const back of [false, true]) {
+      buf.reserveQuad();
+      const quad = buf.vertexCount >> 2;
+      // Esquinas como en las caras: arriba-izq, abajo-izq, arriba-der, abajo-der.
+      const [sx, sz, ex, ez] = back ? [bx, bz, ax, az] : [ax, az, bx, bz];
+      const corners = [
+        [sx, 1, sz, back ? u1 : u0, v1],
+        [sx, 0, sz, back ? u1 : u0, v0],
+        [ex, 1, ez, back ? u0 : u1, v1],
+        [ex, 0, ez, back ? u0 : u1, v0],
+      ];
+      for (const [px, py, pz, u, v] of corners) {
+        const k = buf.vertexCount++;
+        buf.positions[k * 3] = x + px;
+        buf.positions[k * 3 + 1] = y + py;
+        buf.positions[k * 3 + 2] = z + pz;
+        buf.normals[k * 3] = 0;
+        buf.normals[k * 3 + 1] = 1;
+        buf.normals[k * 3 + 2] = 0;
+        buf.uvs[k * 2] = u;
+        buf.uvs[k * 2 + 1] = v;
+        buf.light[k] = 1;
+      }
+      buf.flip[quad] = 0;
+    }
+  }
+}
+
 /**
  * ¿Hay que dibujar la cara de `id` que da hacia el bloque `n`?
  * - Contra aire o un bloque no opaco (agua, vidrio, hojas): sí, salvo que
@@ -372,9 +434,9 @@ function faceVisible(id, n) {
 /**
  * Arma los datos de malla de un chunk.
  *
- * @param {Uint8Array} data bloques del chunk
- * @param {{nx?: Uint8Array, px?: Uint8Array, nz?: Uint8Array, pz?: Uint8Array,
- *   nxnz?: Uint8Array, pxnz?: Uint8Array, nxpz?: Uint8Array, pxpz?: Uint8Array}} neighbors
+ * @param {Uint16Array} data bloques del chunk
+ * @param {{nx?: Uint16Array, px?: Uint16Array, nz?: Uint16Array, pz?: Uint16Array,
+ *   nxnz?: Uint16Array, pxnz?: Uint16Array, nxpz?: Uint16Array, pxpz?: Uint16Array}} neighbors
  *   datos de los 8 chunks vecinos (-X, +X, -Z, +Z y las diagonales) para las
  *   caras y la oclusión de los bordes. Si falta uno, se lo trata como aire.
  * @param {number} [maxY] bloque no-aire más alto del chunk (optimización)
@@ -386,7 +448,7 @@ export function buildChunkMesh(data, neighbors = {}, maxY = CHUNK_HEIGHT - 1) {
 
 /**
  * Arma los datos de malla desde la copia con borde (ver padChunk).
- * @param {Uint8Array} pad
+ * @param {Uint16Array} pad
  * @param {number} [maxY] bloque no-aire más alto del chunk (optimización)
  * @returns {ChunkMeshData | null}
  */
@@ -394,7 +456,7 @@ export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
   for (const l of LAYERS) l.vertexCount = 0;
   const waterBox = new Float32Array([0, 0, 0, 1, WATER_SURFACE, 1]);
   const shifted = new Float32Array(6);
-  const neighbor = new Uint8Array(6); // -X, +X, -Y, +Y, -Z, +Z (orden de FACES)
+  const neighbor = new Uint16Array(6); // -X, +X, -Y, +Y, -Z, +Z (orden de FACES)
   const lastY = CHUNK_HEIGHT - 1;
   const top = Math.min(lastY, maxY);
   let lowY = CHUNK_HEIGHT;
@@ -427,8 +489,14 @@ export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
 
         const buf = LAYERS[layer];
         const before = buf.vertexCount;
-        const boxes = SHAPE_BOXES[id];
-        if (boxes) {
+        let boxes = SHAPE_BOXES[id];
+        if (CONNECTED_BOXES[id]) {
+          // Norte (-Z), este (+X), sur (+Z) y oeste (-X), en el orden de FACES.
+          boxes = CONNECTED_BOXES[id][maskOf(id, neighbor[4], neighbor[1], neighbor[5], neighbor[0])];
+        }
+        if (PLANT[id]) {
+          emitPlant(buf, id, x, y, z);
+        } else if (boxes) {
           // Con forma: cada caja entera, salvo las caras pegadas a un bloque
           // opaco del costado.
           for (const box of boxes) {

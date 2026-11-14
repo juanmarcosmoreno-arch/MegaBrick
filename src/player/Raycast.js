@@ -4,7 +4,7 @@
 // alcance. Los bloques con forma (losas, escalones, puertas) se apuntan por
 // sus cajas: por el hueco de una losa se ve y se apunta lo de atrás.
 
-import { getBlock } from '../world/blocks.js';
+import { shapeBoxesAt } from '../world/shapes.js';
 
 /**
  * @param {{getBlock: (x: number, y: number, z: number) => number}} world
@@ -14,10 +14,12 @@ import { getBlock } from '../world/blocks.js';
  * @param {(id: number) => boolean} isTarget qué bloques detienen el rayo
  * @returns {null | {x: number, y: number, z: number, id: number,
  *   normal: [number, number, number], place: [number, number, number],
- *   distance: number, point: [number, number, number]}} el bloque apuntado,
+ *   distance: number, point: [number, number, number], boxes: number[][] | null}}
+ *   el bloque apuntado,
  *   la cara por la que entró el rayo (normal), dónde iría un bloque nuevo
  *   (place) y el punto exacto donde pega (point). normal es [0, 0, 0] si el
- *   origen ya está dentro de un bloque apuntable.
+ *   origen ya está dentro de un bloque apuntable. boxes: sus cajas (null si
+ *   es un cubo entero; los cercos, según sus vecinos).
  */
 export function raycast(world, origin, dir, maxDistance, isTarget) {
   let x = Math.floor(origin.x);
@@ -43,7 +45,7 @@ export function raycast(world, origin, dir, maxDistance, isTarget) {
   while (t <= maxDistance) {
     const id = world.getBlock(x, y, z);
     if (isTarget(id)) {
-      const boxes = getBlock(id).boxes;
+      const boxes = shapeBoxesAt(world, x, y, z, id);
       const hit = boxes ? hitBoxes(boxes, x, y, z, origin, dir) : { t, normal: [nx, ny, nz] };
       if (hit && hit.t <= maxDistance) {
         const [hx, hy, hz] = hit.normal;
@@ -56,6 +58,7 @@ export function raycast(world, origin, dir, maxDistance, isTarget) {
           place: [x + hx, y + hy, z + hz],
           distance: hit.t,
           point: [origin.x + dir.x * hit.t, origin.y + dir.y * hit.t, origin.z + dir.z * hit.t],
+          boxes,
         };
       }
     }

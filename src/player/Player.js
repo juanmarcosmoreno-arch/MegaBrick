@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { moveAxis, overlapsSolid } from '../world/collision.js';
+import { getBlock } from '../world/blocks.js';
 import { PAD } from './Gamepad.js';
 
 const HALF_PI = Math.PI / 2 - 0.001;
@@ -32,6 +33,10 @@ const SWIM_UP_SPEED = 3.2;
 const WATER_CLIMB_SPEED = 5.5; // trepar para salir del agua contra una orilla
 const WATER_CLIMB_GRACE = 0.4; // segundos después de salir del agua en que se puede seguir trepando
 const SWIM_FLOAT = 1.0; // altura (desde los pies) del pecho: si está bajo el agua, se nada
+// Escalera de mano: se sube avanzando o con Espacio, se baja con Shift y,
+// sin tocar nada, se queda agarrado (baja muy despacio).
+const LADDER_SPEED = 2.6;
+const LADDER_SLIDE = 0.4;
 
 // Qué tan rápido se alcanza la velocidad deseada (mayor = más reactivo).
 const ACCEL_GROUND = 14;
@@ -65,6 +70,7 @@ export class Player {
     this.onGround = false;
     this.inWater = false; // el cuerpo está en el agua (nada)
     this.headInWater = false; // los ojos están bajo el agua
+    this.onLadder = false; // agarrado de una escalera de mano
 
     this._collidedH = false; // chocó de costado en el último movimiento
     this._waterGrace = 0;
@@ -151,6 +157,9 @@ export class Player {
       this._waterGrace = Math.max(0, this._waterGrace - dt);
     }
 
+    // --- Escalera de mano: alguna celda del cuerpo tiene una ---
+    this.onLadder = !this.flying && this._touchesClimbable(world);
+
     // --- Velocidad horizontal deseada (relativa a hacia dónde mira) ---
     let speed;
     if (this.flying) speed = this.sprinting ? FLY_SPRINT_SPEED : FLY_SPEED;
@@ -181,6 +190,10 @@ export class Player {
     if (this.flying) {
       const target = ((jump ? 1 : 0) - (down ? 1 : 0)) * speed;
       v.y += (target - v.y) * (1 - Math.exp(-ACCEL_FLY * dt));
+      vyMove = v.y;
+    } else if (this.onLadder) {
+      const target = jump || forward > 0 ? LADDER_SPEED : down ? -LADDER_SPEED : -LADDER_SLIDE;
+      v.y += (target - v.y) * (1 - Math.exp(-ACCEL_GROUND * dt));
       vyMove = v.y;
     } else if (this.inWater && world.isWaterAt(x, y + SWIM_FLOAT, z)) {
       // Nadando (pecho bajo el agua): se hunde despacio; con Espacio sube.
@@ -298,6 +311,20 @@ export class Player {
   }
 
   /** Mueve sobre un eje (0 = X, 1 = Y, 2 = Z); true si chocó (ver collision.js). */
+  /** ¿Alguna celda que ocupa el cuerpo tiene un bloque que se trepa? */
+  _touchesClimbable(world) {
+    const p = this.position;
+    const half = this.width / 2;
+    for (let by = Math.floor(p.y); by <= Math.floor(p.y + this.height - 0.01); by++) {
+      for (let bz = Math.floor(p.z - half); bz <= Math.floor(p.z + half); bz++) {
+        for (let bx = Math.floor(p.x - half); bx <= Math.floor(p.x + half); bx++) {
+          if (getBlock(world.getBlock(bx, by, bz)).climbable) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   _moveAxis(world, axis, d) {
     return moveAxis(world, this.position, this.width / 2, this.height, axis, d);
   }

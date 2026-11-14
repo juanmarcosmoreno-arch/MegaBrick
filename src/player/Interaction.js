@@ -7,15 +7,18 @@
 // bloque se agrieta y suena un golpecito; si se suelta o se apunta a otro,
 // se empieza de nuevo.
 //
-// Los escalones y las puertas se ponen mirando hacia donde mira el jugador;
+// Los escalones, puertas, tranqueras y trampillas se ponen mirando hacia
+// donde mira el jugador; la escalera de mano, contra la cara apuntada;
 // una losa va arriba si se apunta a la mitad de arriba de una cara (o a un
-// techo). Clic derecho sobre una puerta la abre o la cierra.
+// techo). Clic derecho sobre una puerta, tranquera o trampilla la abre o la
+// cierra. Las plantas se reemplazan con lo que se pone sobre ellas.
 //
 // Si se apunta a un animal (más cerca que el bloque de atrás), clic derecho
 // lo acaricia y clic izquierdo lo empuja.
 
 import * as THREE from 'three';
-import { BLOCK, COLLISION_BOXES, SHAPE, getBlock } from '../world/blocks.js';
+import { BLOCK, SHAPE, getBlock } from '../world/blocks.js';
+import { collisionBoxesAt } from '../world/shapes.js';
 import { CHUNK_HEIGHT } from '../world/Chunk.js';
 import { PAD } from './Gamepad.js';
 import { raycast } from './Raycast.js';
@@ -137,7 +140,7 @@ export class BlockInteraction {
     const pressed = controls.wasClicked(2) || pad.wasPressed(PAD.LT);
     if (pressed || (placing && !this._placeHeld && this._placeTimer <= 0)) {
       this._placeTimer = REPEAT;
-      const onDoor = this.target && getBlock(this.target.id).shape === SHAPE.DOOR;
+      const onDoor = this.target && usable(this.target.id);
       if (onDoor) this._placeHeld = true;
       if (pressed || !onDoor) changed = this.placeAtTarget() || changed;
     }
@@ -204,6 +207,8 @@ export class BlockInteraction {
     if (!this._clear(t.x, t.y, t.z)) return false;
     const partner = doorPartner(this.world, t.x, t.y, t.z, t.id);
     if (partner) this._clear(t.x, partner.y, t.z);
+    // Una planta que estaba arriba se cae con lo que la sostenía.
+    if (getBlock(this.world.getBlock(t.x, t.y + 1, t.z)).soil) this._clear(t.x, t.y + 1, t.z);
     this.onAction?.('break', t.id);
     return true;
   }
@@ -227,13 +232,17 @@ export class BlockInteraction {
     const t = this.target;
     if (!t) return false;
     if (getBlock(t.id).shape === SHAPE.DOOR) return this._toggleDoor(t);
-    const [x, y, z] = t.place;
+    if (getBlock(t.id).toggle !== undefined) return this._toggleBlock(t);
+    // Sobre una planta (pasto alto, flores), va en su lugar.
+    const [x, y, z] = getBlock(t.id).shape === SHAPE.PLANT ? [t.x, t.y, t.z] : t.place;
     // Origen dentro de un bloque (sin cara) o fuera del alto del mundo: nada.
     if (t.normal.every((n) => n === 0) || y < 1 || y >= CHUNK_HEIGHT) return false;
     if (!this._isFree(x, y, z)) return false;
     const item = this.hotbar.selectedBlock;
     const block = getBlock(item);
     if (block.shape === SHAPE.DOOR) return this._placeDoor(x, y, z, block);
+    // Las plantas van sobre tierra (y no adentro del agua).
+    if (block.soil && (!block.soil.includes(this.world.getBlock(x, y - 1, z)) || getBlock(this.world.getBlock(x, y, z)).liquid)) return false;
     const id = this._variantFor(block, t);
     if (this._intersectsPlayer(x, y, z, id)) return false;
     if (!this.world.editBlock(x, y, z, id)) return false;
@@ -241,10 +250,10 @@ export class BlockInteraction {
     return true;
   }
 
-  /** ¿Se puede poner algo en (x, y, z)? Solo en aire o agua (el agua se reemplaza). */
+  /** ¿Se puede poner algo en (x, y, z)? En aire, agua o una planta (se reemplazan). */
   _isFree(x, y, z) {
     const current = getBlock(this.world.getBlock(x, y, z));
-    return current.id === BLOCK.AIR || current.liquid;
+    return current.id === BLOCK.AIR || current.liquid || current.shape === SHAPE.PLANT;
   }
 
   /** Hacia dónde mira el jugador, redondeado a norte, este, sur u oeste (ver FACING). */
@@ -259,7 +268,16 @@ export class BlockInteraction {
    * losa arriba si se apunta a un techo o a la mitad de arriba de una cara.
    */
   _variantFor(block, t) {
-    if (block.shape === SHAPE.STAIRS) return block.variants[this.facing];
+    if (block.shape === SHAPE.STAIRS || block.shape === SHAPE.GATE || block.shape === SHAPE.TRAPDOOR) {
+      return block.variants[this.facing];
+    }
+    if (block.shape === SHAPE.LADDER) {
+      // Contra la cara apuntada (de espaldas a ella); apuntando al piso o al
+      // techo, contra la pared de enfrente.
+      const [nx, , nz] = t.normal;
+      const f = nz === -1 ? 0 : nx === 1 ? 1 : nz === 1 ? 2 : nx === -1 ? 3 : (this.facing + 2) % 4;
+      return block.variants[f];
+    }
     if (block.shape === SHAPE.SLAB && block.slabTop) {
       const [, ny] = t.normal;
       const upper = ny === -1 || (ny === 0 && t.point[1] - Math.floor(t.point[1]) > 0.5);
@@ -278,6 +296,16 @@ export class BlockInteraction {
     if (!this.world.editBlock(x, y, z, bottom)) return false;
     this.world.editBlock(x, y + 1, z, top);
     this.onAction?.('place', bottom);
+    return true;
+  }
+
+  /** Abre o cierra la tranquera o la trampilla apuntada. */
+  _toggleBlock(t) {
+    const next = getBlock(t.id).toggle;
+    // Al cerrarla no puede quedar adentro del jugador.
+    if (this._intersectsPlayer(t.x, t.y, t.z, next)) return false;
+    if (!this.world.editBlock(t.x, t.y, t.z, next)) return false;
+    this.onAction?.('place', t.id);
     return true;
   }
 
@@ -305,7 +333,7 @@ export class BlockInteraction {
    * puede poner sobre la cabeza si queda lugar).
    */
   _intersectsPlayer(x, y, z, id) {
-    const boxes = COLLISION_BOXES[id];
+    const boxes = collisionBoxesAt(this.world, x, y, z, id);
     if (!boxes) return false;
     const p = this.player.position;
     const half = this.player.width / 2;
@@ -314,6 +342,12 @@ export class BlockInteraction {
     const cell = [x, y, z];
     return boxes.some((b) => [0, 1, 2].every((a) => cell[a] + b[a] < hi[a] - EPS && cell[a] + b[a + 3] > lo[a] + EPS));
   }
+}
+
+/** ¿Se usa con clic derecho (puerta, tranquera, trampilla) en vez de poner algo contra él? */
+function usable(id) {
+  const b = getBlock(id);
+  return b.shape === SHAPE.DOOR || b.toggle !== undefined;
 }
 
 /**

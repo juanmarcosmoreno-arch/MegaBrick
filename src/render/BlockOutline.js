@@ -78,14 +78,16 @@ const crackGeometries = new Map();
  * forma (en un escalón no quedan grietas en el aire), con la textura según
  * el lugar en el bloque, como sus caras (en una losa no se aplasta).
  */
-function crackGeometry(id) {
-  let geometry = crackGeometries.get(id);
+function crackGeometry(id, boxes = getBlock(id).boxes) {
+  // Por forma (los cercos cambian de cajas según sus vecinos; un cubo, por ID).
+  const key = boxes ?? id;
+  let geometry = crackGeometries.get(key);
   if (geometry) return geometry;
   const position = [];
   const uv = [];
   const index = [];
   const clamp = (v) => Math.min(1, Math.max(0, v));
-  for (const [x0, y0, z0, x1, y1, z1] of getBlock(id).boxes ?? [[0, 0, 0, 1, 1, 1]]) {
+  for (const [x0, y0, z0, x1, y1, z1] of boxes ?? [[0, 0, 0, 1, 1, 1]]) {
     const box = new THREE.BoxGeometry(x1 - x0 + 2 * CRACK_GAP, y1 - y0 + 2 * CRACK_GAP, z1 - z0 + 2 * CRACK_GAP);
     box.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
     const pos = box.attributes.position;
@@ -108,7 +110,7 @@ function crackGeometry(id) {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geometry.setIndex(index);
-  crackGeometries.set(id, geometry);
+  crackGeometries.set(key, geometry);
   return geometry;
 }
 
@@ -176,7 +178,7 @@ export class BlockOutline {
     // Lo que ocupan todas sus cajas juntas (un cubo entero si no tiene forma).
     const lo = [0, 0, 0];
     const hi = [1, 1, 1];
-    const boxes = getBlock(block.id).boxes;
+    const boxes = block.boxes !== undefined ? block.boxes : getBlock(block.id).boxes;
     if (boxes) {
       for (let a = 0; a < 3; a++) {
         lo[a] = Math.min(...boxes.map((b) => b[a]));
@@ -186,7 +188,7 @@ export class BlockOutline {
     this.mesh.scale.set(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
     this.mesh.position.set(block.x + (lo[0] + hi[0]) / 2, block.y + (lo[1] + hi[1]) / 2, block.z + (lo[2] + hi[2]) / 2);
     if (this.crack.visible) {
-      this.crack.geometry = crackGeometry(block.id);
+      this.crack.geometry = crackGeometry(block.id, boxes);
       this.crack.position.set(block.x, block.y, block.z);
       const stage = Math.min(CRACK_STAGES - 1, Math.floor(progress * CRACK_STAGES));
       this.crack.material.map.offset.x = stage / CRACK_STAGES;

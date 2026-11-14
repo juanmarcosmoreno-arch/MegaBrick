@@ -15,7 +15,7 @@ export function getBlockGeometry(id) {
   let geometry = cache.get(id);
   if (geometry) return geometry;
   // El bloque va en y = 1: en y = 0 el mesher no genera la cara de abajo.
-  const data = new Uint8Array(CHUNK_VOLUME);
+  const data = new Uint16Array(CHUNK_VOLUME);
   data[Chunk.index(0, 1, 0)] = id;
   const d = buildChunkMesh(data, {}, 1);
   geometry = new THREE.BufferGeometry();

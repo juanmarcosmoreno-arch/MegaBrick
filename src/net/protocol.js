@@ -11,7 +11,7 @@ import { ACTIONS } from '../animals/Animal.js';
 import { SPECIES_IDS } from '../animals/species/index.js';
 
 /** Versión del protocolo: invitado y anfitrión tienen que coincidir. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Prefijo de los IDs en el servidor de PeerJS (evita choques con otras apps). */
 const PEER_PREFIX = 'megabrick-v1-';

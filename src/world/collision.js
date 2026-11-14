@@ -1,7 +1,9 @@
 // Choques de una caja (el jugador, un animal) contra el mundo: contra los
-// bloques sólidos y las cajas de las losas, escalones y puertas.
+// bloques sólidos y las cajas de las losas, escalones, puertas y cercos. Los
+// cercos chocan más alto que un bloque (1,5), así que también se mira la
+// capa de abajo de la caja.
 
-import { COLLISION_BOXES } from './blocks.js';
+import { collisionBoxesAt } from './shapes.js';
 
 /** Margen para que tocarse justo en una cara no cuente como choque. */
 const EPS = 1e-6;
@@ -41,10 +43,10 @@ export function moveAxis(world, p, halfWidth, height, axis, d) {
   setBox(p, halfWidth, height);
   let hit = false;
   let limit = d > 0 ? Infinity : -Infinity;
-  for (let by = Math.floor(lo[1] + EPS); by <= Math.floor(hi[1] - EPS); by++) {
+  for (let by = Math.floor(lo[1] + EPS) - 1; by <= Math.floor(hi[1] - EPS); by++) {
     for (let bz = Math.floor(lo[2] + EPS); bz <= Math.floor(hi[2] - EPS); bz++) {
       for (let bx = Math.floor(lo[0] + EPS); bx <= Math.floor(hi[0] - EPS); bx++) {
-        const boxes = COLLISION_BOXES[world.getBlock(bx, by, bz)];
+        const boxes = collisionBoxesAt(world, bx, by, bz, world.getBlock(bx, by, bz));
         if (!boxes) continue;
         cell[0] = bx;
         cell[1] = by;
@@ -67,10 +69,10 @@ export function moveAxis(world, p, halfWidth, height, axis, d) {
 /** ¿La caja con los pies en `p` se superpone con algo sólido? */
 export function overlapsSolid(world, p, halfWidth, height) {
   setBox(p, halfWidth, height);
-  for (let by = Math.floor(lo[1] + EPS); by <= Math.floor(hi[1] - EPS); by++) {
+  for (let by = Math.floor(lo[1] + EPS) - 1; by <= Math.floor(hi[1] - EPS); by++) {
     for (let bz = Math.floor(lo[2] + EPS); bz <= Math.floor(hi[2] - EPS); bz++) {
       for (let bx = Math.floor(lo[0] + EPS); bx <= Math.floor(hi[0] - EPS); bx++) {
-        const boxes = COLLISION_BOXES[world.getBlock(bx, by, bz)];
+        const boxes = collisionBoxesAt(world, bx, by, bz, world.getBlock(bx, by, bz));
         if (!boxes) continue;
         cell[0] = bx;
         cell[1] = by;

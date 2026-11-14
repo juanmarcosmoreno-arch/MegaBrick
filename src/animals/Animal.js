@@ -5,8 +5,9 @@
 // En el multijugador lo simula el anfitrión; en los invitados solo se mueve
 // hacia lo último que llegó por la red (ver Animals.js).
 
-import { BLOCK, COLLISION_BOXES, getBlock } from '../world/blocks.js';
+import { BLOCK, getBlock } from '../world/blocks.js';
 import { moveAxis } from '../world/collision.js';
+import { collisionBoxesAt } from '../world/shapes.js';
 
 const GRAVITY = 32;
 const JUMP_SPEED = 8.9; // sube un bloque, como el jugador
@@ -428,7 +429,7 @@ function solidAt(world, x, y, z) {
   const bx = Math.floor(x);
   const by = Math.floor(y);
   const bz = Math.floor(z);
-  const boxes = COLLISION_BOXES[world.getBlock(bx, by, bz)];
+  const boxes = collisionBoxesAt(world, bx, by, bz, world.getBlock(bx, by, bz));
   if (!boxes) return false;
   const lx = x - bx;
   const ly = y - by;
@@ -440,8 +441,9 @@ function solidAt(world, x, y, z) {
  * El piso debajo de (x, z) bajando desde `fromY` hasta `depth` bloques:
  * {y (donde apoyan los pies), water} o null si no hay (precipicio). Cuenta
  * lo que hay justo en ese punto (una losa, la mitad baja de un escalón; una
- * puerta abierta, que está a un costado, no). El follaje no cuenta como
- * piso: así no se suben a las copas de los árboles.
+ * puerta abierta, que está a un costado, no; un cerco cuenta más alto, así
+ * que no se salta). El follaje no cuenta como piso: así no se suben a las
+ * copas de los árboles.
  */
 export function groundBelow(world, x, fromY, z, depth) {
   const bx = Math.floor(x);
@@ -451,20 +453,24 @@ export function groundBelow(world, x, fromY, z, depth) {
   const top = Math.floor(fromY);
   for (let y = top; y > top - depth; y--) {
     const id = world.getBlock(bx, y, bz);
-    if (id === BLOCK.LEAVES) return null;
+    if (getBlock(id).leaves) return null;
     if (getBlock(id).liquid) return { y: y + 1, water: true };
-    const h = topAt(id, lx, lz);
+    const h = topAt(world, bx, y, bz, id, lx, lz);
     if (h === null) continue;
     // Tiene que haber lugar arriba (dos bloques libres).
-    if (topAt(world.getBlock(bx, y + 1, bz), lx, lz) !== null || topAt(world.getBlock(bx, y + 2, bz), lx, lz) !== null) return null;
+    const free = (dy) => topAt(world, bx, y + dy, bz, world.getBlock(bx, y + dy, bz), lx, lz) === null;
+    if (!free(1) || !free(2)) return null;
     return { y: y + h, water: false };
   }
   return null;
 }
 
-/** Hasta qué altura (0 a 1) llega el bloque `id` en el punto (lx, lz) de su celda, o null si ahí no hay nada. */
-function topAt(id, lx, lz) {
-  const boxes = COLLISION_BOXES[id];
+/**
+ * Hasta qué altura (de 0 a 1, 1,5 un cerco) llega el bloque `id` de
+ * (x, y, z) en el punto (lx, lz) de su celda, o null si ahí no hay nada.
+ */
+function topAt(world, x, y, z, id, lx, lz) {
+  const boxes = collisionBoxesAt(world, x, y, z, id);
   if (!boxes) return null;
   let top = null;
   for (const c of boxes) if (lx >= c[0] && lx <= c[3] && lz >= c[2] && lz <= c[5]) top = Math.max(top ?? 0, c[4]);

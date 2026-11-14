@@ -31,6 +31,7 @@ El juego se construye por etapas. Siempre queda una versión jugable.
 | 9 | Materiales de construcción: madera, piedra, ladrillo, revoque de colores, tejas, escalones, losas, puertas, ventanas y faroles; menú de materiales | ✅ |
 | 10 | Animales: carpincho, oveja, gallina y conejo (acariciarlos, empujarlos, te siguen), también en el multijugador | ✅ |
 | 11 | Resistencia de los materiales: romper tarda distinto según el bloque, con grietas | ✅ |
+| 12 | Más bloques: naturaleza, pino y jacarandá, plantas y flores, hormigón, baldosa calcárea, metales, chapa, vidrios de colores, alfombras, cercos, rejas, paneles de vidrio, tranqueras, escaleras de mano y trampillas | ✅ |
 
 ## Requisitos
 
@@ -130,11 +131,16 @@ Algunas cosas siguen pidiendo el teclado o el mouse: escribir (nombre de un mund
   | 1 – 1,2 s | Piedra, empedrado, ladrillos, piedra lisa, ladrillo de piedra |
   | 1,3 – 1,8 s | Mármol y los minerales (cobrizo, azurita y, la más dura, solarita) |
 - **Hotbar:** tiene 9 casillas abajo de la pantalla. Un mundo nuevo empieza con césped, tierra, piedra, tablones, ladrillo de piedra, vidrio, tronco, follaje y arena. El bloque elegido se ve en la mano, en primera persona y también en el personaje en tercera persona.
-- **Menú de materiales (E):** muestra todos los bloques para construir, en 7 grupos: naturaleza, madera, piedra y ladrillo, revoque de colores, techos, escalones y losas, y puertas, ventanas y detalles. Arriba están las 9 casillas: elegís una y después el material que va en ella (también con las teclas 1 – 9). Lo que ponés en la hotbar se guarda con el mundo.
+- **Menú de materiales (E):** muestra todos los bloques para construir, en 11 grupos: naturaleza, plantas y flores, madera, piedra y ladrillo, metal y vidrio, revoque de colores, alfombras, techos, escalones y losas, cercos, rejas y escaleras, y puertas, ventanas y detalles. Si la ventana es chica, el borde de abajo se esfuma: hay más bajando. Arriba están las 9 casillas: elegís una y después el material que va en ella (también con las teclas 1 – 9). Lo que ponés en la hotbar se guarda con el mundo.
 - **Escalones:** se ponen mirando hacia donde mirás, con la parte alta del lado de enfrente, así que para hacer una escalera o un techo a dos aguas alcanza con mirar hacia donde sube. Se suben caminando, sin saltar.
 - **Losas:** medio bloque. Van abajo, salvo que apuntes a un techo o a la mitad de arriba de una pared: ahí van arriba. Una losa también se sube caminando (un bloque entero sigue pidiendo saltar).
 - **Puertas:** ocupan dos bloques de alto y se ponen mirando hacia donde mirás, con la bisagra a tu izquierda. Clic derecho (o el gatillo izquierdo del joystick) las abre y las cierra; rotas, se va la puerta entera. Abiertas dejan pasar; cerradas, no.
 - **Faroles:** brillan solos, igual de día que de noche (no iluminan lo de alrededor).
+- **Cercos, rejas y paneles de vidrio:** se unen solos con el de al lado y con los bloques enteros. Los cercos no se saltan (ni los saltan los animales: sirven de corral).
+- **Tranqueras y trampillas:** se ponen mirando hacia donde mirás y se abren y se cierran con clic derecho, como las puertas. La tranquera abierta deja pasar; la trampilla cerrada se pisa y abierta deja caer al hueco.
+- **Escaleras de mano:** se ponen contra la pared apuntada. Para subir, avanzá o apretá Espacio; para bajar, Shift; si no tocás nada, te quedás agarrado.
+- **Plantas y flores:** van sobre césped o tierra (el hongo, también sobre piedra), se atraviesan y salen con un toque. Si sacás el bloque de abajo, se caen; si ponés un bloque apuntándoles, lo reemplazan.
+- **Alfombras y vidrios de colores:** las alfombras son una capa finita que se pisa; los vidrios dejan ver a través, teñido.
 - **Formas:** las losas, los escalones y las puertas chocan, se apuntan y se marcan con su forma real (por el hueco de una losa se apunta lo de atrás).
 - **Mallas:** al cambiar un bloque se rearma enseguida solo la malla de su chunk, y la del chunk vecino si el bloque está en el borde.
 - **Agua:** si rompés un bloque con agua arriba o a un costado, el hueco se llena de agua. Por ahora el agua no fluye.
@@ -184,7 +190,8 @@ El mundo es infinito y se genera a medida que te movés, en chunks de 16 × 16 b
 - **Terreno:** sale de ruido simplex con varias octavas, que arma llanuras, colinas y algunas montañas. Las cimas muy altas son de piedra.
 - **Capas:** césped arriba, 3 o 4 de tierra, piedra debajo y lecho primordial indestructible en y = 0.
 - **Agua:** el mar está a una altura fija (y = 40) y es semitransparente. Hay arena en costas y fondos poco profundos.
-- **Árboles:** se agrupan en bosques y también aparecen sueltos. Sus copas pasan de un chunk a otro sin cortarse.
+- **Árboles:** se agrupan en bosques y también aparecen sueltos. En las alturas son pinos, y en el llano a veces hay jacarandás en flor. Sus copas pasan de un chunk a otro sin cortarse.
+- **Plantas:** pasto alto suelto, flores (margaritas, ceibos y flores celestes) por manchones, y en el bosque helechos y algún hongo. Las cumbres más altas tienen nieve.
 - **Minerales:** cobrizo, azurita y solarita aparecen en vetas dentro de la piedra. Cuanto más raro el mineral, más hondo.
 - **Carga de chunks:** se generan y mallan en segundo plano (ver [Rendimiento](#rendimiento)), primero los más cercanos al jugador y los que tiene adelante. Los lejanos se liberan de la memoria.
 - **Niebla:** tiene el color del horizonte (cambia con la hora) y tapa el borde del área cargada.
@@ -240,8 +247,9 @@ src/
   main.js               → arranque, estados del juego y loop principal
   style.css             → estilos del HUD y los menús
   world/
-    blocks.js           → tipos de bloque, sus propiedades y formas (losas, escalones, puertas)
-    Chunk.js            → datos de un chunk de 16×128×16 (Uint8Array, 0 = aire)
+    blocks.js           → tipos de bloque, sus propiedades y formas (losas, escalones, puertas, plantas, cercos...)
+    shapes.js           → formas que dependen de los vecinos: cercos, rejas y paneles que se unen
+    Chunk.js            → datos de un chunk de 16×128×16 (Uint16Array, 0 = aire)
     World.js            → chunks alrededor del jugador (carga/descarga, cola de prioridad), get/set de bloques, mallas
     ChunkWorkers.js     → grupo de Web Workers: reparte los trabajos y avisa cuando terminan
     chunkWorker.js      → el worker: genera chunks y arma sus mallas
@@ -327,10 +335,24 @@ src/
 | 82 – 113 | Puerta de madera y puerta oscura | 16 IDs cada una: 4 orientaciones, cerrada o abierta, mitad de abajo o de arriba |
 | 114 – 116 | Ventana, farol, biblioteca | El farol brilla solo |
 | 117 – 128 | Escalones y losas de tablones y de ladrillo de piedra | |
+| 129 – 132 | Grava, arcilla, nieve, hielo | |
+| 133 – 153 | Empedrado con musgo, granito y basalto, con escalones y losas | |
+| 154 | Cactus | Un poco más angosto que un bloque |
+| 155 – 171 | Pino y jacarandá: tronco, follaje y tablones (con escalones y losas) | |
+| 172 – 178 | Pasto alto, helecho, margarita, flor de ceibo, flor celeste, hongo | Plantas: dos planos en X, se atraviesan |
+| 179 – 187 | Hormigón (con escalones y losas), baldosa calcárea, venecitas | |
+| 188 – 191 | Bloques de hierro, cobrizo, azurita y solarita | |
+| 192 – 205 | Chapa y chapa oxidada, con escalones y losas | |
+| 206 – 211 | Vidrio rojo, amarillo, verde, celeste, azul y violeta | Translúcidos |
+| 212 – 215 | Cerco de madera, cerco oscuro, rejas, panel de vidrio | Un ID cada uno: se unen con los vecinos al dibujarlos |
+| 216 – 223 | Tranquera | 8 IDs: 4 orientaciones, cerrada o abierta |
+| 224 – 227 | Escalera de mano | Una por orientación |
+| 228 – 235 | Trampilla | 8 IDs: 4 orientaciones, cerrada o abierta |
+| 236 – 247 | Alfombras de los 12 colores del revoque | |
 
-Cada escalón usa 4 IDs (uno por orientación) y cada losa 2 (abajo y arriba): en la hotbar y en el menú se ve uno solo, y al ponerlo se elige el que corresponde. Los IDs se guardan en los mundos, así que los bloques nuevos se agregan siempre al final.
+Cada escalón usa 4 IDs (uno por orientación) y cada losa 2 (abajo y arriba): en la hotbar y en el menú se ve uno solo, y al ponerlo se elige el que corresponde. Los IDs se guardan en los mundos, así que los bloques nuevos se agregan siempre al final. Los chunks guardan IDs de 16 bits: hay lugar para 1024 tipos de bloque.
 
-Para agregar un bloque se suma una línea en `src/world/blocks.js` (con `add`, o `addMaterial` si lleva escalones y losas) y, si necesita una textura nueva, su nombre en `src/render/atlasLayout.js` y su pintor en `src/render/textures.js`. Las formas se describen con cajas (`boxes`): con ellas se dibuja, se choca y se apunta.
+Para agregar un bloque se suma una línea en `src/world/blocks.js` (con `add`, o `addMaterial` si lleva escalones y losas) y, si necesita una textura nueva, su nombre en `src/render/atlasLayout.js` y su pintor en `src/render/textures.js` o en un archivo de `src/render/tiles/`. Las formas se describen con cajas (`boxes`): con ellas se dibuja, se choca y se apunta.
 
 ## Publicación en GitHub Pages
 

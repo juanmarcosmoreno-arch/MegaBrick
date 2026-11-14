@@ -11,7 +11,7 @@
 // (ver los comentarios "Biomas" y "Cuevas").
 
 import { createNoise2D } from 'simplex-noise';
-import { BLOCK } from './blocks.js';
+import { BLOCK, getBlock } from './blocks.js';
 import { CHUNK_HEIGHT, CHUNK_SIZE, CHUNK_VOLUME, Chunk } from './Chunk.js';
 
 /** Nivel del mar: el agua llena todo lo que quede por debajo. */
@@ -22,10 +22,18 @@ const MAX_TERRAIN = CHUNK_HEIGHT - 12;
 
 /** Por encima de esta altura las montañas son de piedra pelada. */
 const ROCK_LINE = 92;
+/** Y más arriba todavía, con nieve en las cumbres. */
+const SNOW_LINE = 104;
+/** Desde esta altura los árboles son pinos. */
+const PINE_LINE = 64;
 
 // Árboles: el mundo se divide en celdas y cada celda puede tener uno.
 const TREE_CELL = 5;
-const TREE_RADIUS = 2; // radio de la copa (las copas cruzan bordes de chunk)
+const TREE_RADIUS = 3; // radio máximo de la copa (las copas cruzan bordes de chunk)
+
+// Plantas: flores por manchones (celdas de PATCH bloques con una flor cada una).
+const PATCH = 8;
+const FLOWERS = [BLOCK.FLOWER_DAISY, BLOCK.FLOWER_CEIBO, BLOCK.FLOWER_BLUE];
 
 /** Generador pseudoaleatorio mulberry32 (rápido y determinista). */
 function mulberry32(seed) {
@@ -64,6 +72,19 @@ const ORES = [
   { id: BLOCK.ORE_AZURITE, perChunk: 4, minY: 4, maxY: 40, size: [3, 6] },
   { id: BLOCK.ORE_SOLARITE, perChunk: 2, minY: 2, maxY: 20, size: [2, 4] },
 ];
+
+/**
+ * Cada tipo de árbol: tronco, follaje y capas de la copa como [altura
+ * relativa a la punta del tronco, radio].
+ */
+const TREE_KINDS = {
+  // El de siempre: dos capas anchas, una más chica y la punta.
+  oak: { log: BLOCK.LOG, leaves: BLOCK.LEAVES, layers: [[-2, 2], [-1, 2], [0, 1], [1, 1]] },
+  // Pino: alto y en punta, con pisos que se angostan.
+  pine: { log: BLOCK.PINE_LOG, leaves: BLOCK.PINE_LEAVES, layers: [[-4, 2], [-3, 1], [-2, 2], [-1, 1], [0, 1], [1, 0], [2, 0]] },
+  // Jacarandá: copa ancha y chata.
+  jacaranda: { log: BLOCK.JACARANDA_LOG, leaves: BLOCK.JACARANDA_LEAVES, layers: [[-1, 3], [0, 3], [1, 2]] },
+};
 
 export class TerrainGenerator {
   /**
@@ -125,10 +146,10 @@ export class TerrainGenerator {
 
   /**
    * Genera los bloques de un chunk.
-   * @returns {{data: Uint8Array, maxY: number}}
+   * @returns {{data: Uint16Array, maxY: number}}
    */
   generateChunk(cx, cz) {
-    const data = new Uint8Array(CHUNK_VOLUME);
+    const data = new Uint16Array(CHUNK_VOLUME);
     const x0 = cx * CHUNK_SIZE;
     const z0 = cz * CHUNK_SIZE;
     let maxY = SEA_LEVEL;
@@ -146,7 +167,7 @@ export class TerrainGenerator {
         let top;
         let under;
         if (rocky) {
-          top = BLOCK.STONE;
+          top = h >= SNOW_LINE ? BLOCK.SNOW : BLOCK.STONE;
           under = BLOCK.STONE;
         } else if (beach) {
           // Costas y fondo poco profundo de arena; más hondo, tierra.
@@ -176,6 +197,9 @@ export class TerrainGenerator {
     // 3) Árboles: se miran también las celdas vecinas, porque la copa de un
     // árbol de otro chunk puede caer adentro de este.
     maxY = Math.max(maxY, this._placeTrees(data, cx, cz));
+
+    // 4) Pasto alto, helechos, flores y hongos sobre el césped libre.
+    maxY = Math.max(maxY, this._placePlants(data, cx, cz));
 
     return { data, maxY: Math.min(CHUNK_HEIGHT - 1, maxY) };
   }
@@ -220,8 +244,14 @@ export class TerrainGenerator {
     const ground = this.heightAt(x, z);
     // Solo sobre césped: ni playa, ni agua, ni piedra pelada.
     if (this._isBeach(ground) || ground >= ROCK_LINE - 4) return null;
-    const trunk = 4 + Math.floor(hash01(this.seed, gx, gz, 4) * 3);
-    return { x, z, base: ground + 1, trunk };
+    // En las alturas, pinos; en el llano y fuera del bosque, a veces un
+    // jacarandá; si no, el árbol de siempre.
+    let kind = 'oak';
+    if (ground >= PINE_LINE) kind = 'pine';
+    else if (forest <= 0.25 && hash01(this.seed, gx, gz, 5) < 0.3) kind = 'jacaranda';
+    const extra = kind === 'pine' ? 3 : 0;
+    const trunk = 4 + extra + Math.floor(hash01(this.seed, gx, gz, 4) * 3);
+    return { x, z, base: ground + 1, trunk, kind };
   }
 
   /** Coloca los árboles que tocan el chunk. Devuelve la altura máxima usada. */
@@ -248,23 +278,58 @@ export class TerrainGenerator {
         const t = this.treeInCell(gx, gz);
         if (!t) continue;
         const top = t.base + t.trunk; // primera altura por encima del tronco
-        // Copa: dos capas anchas, una más chica y la punta.
-        for (let dy = -2; dy <= 1; dy++) {
-          const r = dy <= -1 ? 2 : 1;
+        const { log, leaves, layers } = TREE_KINDS[t.kind];
+        // Copa: capas de hojas (altura relativa a la punta del tronco y radio).
+        for (const [dy, r] of layers) {
           for (let dz = -r; dz <= r; dz++) {
             for (let dx = -r; dx <= r; dx++) {
               // Esquinas recortadas (al azar en las capas anchas) para que
               // la copa no sea un cubo perfecto.
               const corner = Math.abs(dx) === r && Math.abs(dz) === r;
               if (corner && (r === 1 || hash01(this.seed, t.x + dx, t.z + dz, top + dy) < 0.6)) continue;
-              set(t.x + dx, top + dy, t.z + dz, BLOCK.LEAVES, true);
+              set(t.x + dx, top + dy, t.z + dz, leaves, true);
             }
           }
         }
         // Tronco (pisa las hojas de la copa).
-        for (let i = 0; i < t.trunk; i++) set(t.x, t.base + i, t.z, BLOCK.LOG, false);
+        for (let i = 0; i < t.trunk; i++) set(t.x, t.base + i, t.z, log, false);
         // Debajo del tronco, tierra en vez de césped.
         set(t.x, t.base - 1, t.z, BLOCK.DIRT, false);
+      }
+    }
+    return maxY;
+  }
+
+  /**
+   * Plantas sobre el césped que quedó libre (después de los árboles): pasto
+   * alto suelto, flores por manchones, y en el bosque helechos y algún hongo.
+   * Devuelve la altura máxima usada.
+   */
+  _placePlants(data, cx, cz) {
+    const x0 = cx * CHUNK_SIZE;
+    const z0 = cz * CHUNK_SIZE;
+    let maxY = 0;
+    for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+      for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+        const x = x0 + lx;
+        const z = z0 + lz;
+        const h = this.heightAt(x, z);
+        if (h + 1 >= CHUNK_HEIGHT) continue;
+        if (data[Chunk.index(lx, h, lz)] !== BLOCK.GRASS || data[Chunk.index(lx, h + 1, lz)] !== BLOCK.AIR) continue;
+        const r = hash01(this.seed, x, z, 41);
+        const forest = this.nForest(x / 90, z / 90) > 0.25;
+        // Cada manchón tiene (o no) su flor; adentro, salpicada.
+        const px = Math.floor(x / PATCH);
+        const pz = Math.floor(z / PATCH);
+        const patch = hash01(this.seed, px, pz, 43);
+        let plant = BLOCK.AIR;
+        if (forest && r < 0.05) plant = BLOCK.FERN;
+        else if (forest && r < 0.056) plant = BLOCK.MUSHROOM;
+        else if (patch < 0.35 && r > 0.88) plant = FLOWERS[Math.floor(hash01(this.seed, px, pz, 44) * FLOWERS.length)];
+        else if (r > 0.12 && r < 0.22) plant = BLOCK.TALL_GRASS;
+        if (plant === BLOCK.AIR) continue;
+        data[Chunk.index(lx, h + 1, lz)] = plant;
+        if (h + 1 > maxY) maxY = h + 1;
       }
     }
     return maxY;
@@ -277,9 +342,9 @@ export class TerrainGenerator {
     const { data } = this.generateChunk(cx, cz);
     const lx = x - cx * CHUNK_SIZE;
     const lz = z - cz * CHUNK_SIZE;
-    return (
-      data[Chunk.index(lx, y, lz)] === BLOCK.AIR && data[Chunk.index(lx, y + 1, lz)] === BLOCK.AIR
-    );
+    // Las plantas se atraviesan: cuentan como libres.
+    const free = (id) => !getBlock(id).solid && !getBlock(id).liquid;
+    return free(data[Chunk.index(lx, y, lz)]) && free(data[Chunk.index(lx, y + 1, lz)]);
   }
 
   /**

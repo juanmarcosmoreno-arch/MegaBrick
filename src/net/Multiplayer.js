@@ -33,6 +33,7 @@ import { RemotePlayer } from '../player/RemotePlayer.js';
 import { REACH } from '../player/Interaction.js';
 import { NET_INTERVAL } from '../animals/Animals.js';
 import { BLOCK } from '../world/blocks.js';
+import { GENERATION } from '../world/TerrainGen.js';
 
 /** Envíos de estado por segundo. */
 const STATE_RATE = 15;
@@ -477,6 +478,7 @@ export class Multiplayer {
       v: PROTOCOL_VERSION,
       seed: g.generator.seed,
       seedText: g.options.seedText,
+      generation: g.generator.generation,
       edits: g.world.exportEdits(),
       host: { id: HOST_ID, name: this.name, color: g.avatar.variant },
       players: others,
@@ -569,6 +571,7 @@ export class Multiplayer {
     this.game.loadWorld({
       seed: msg.seed >>> 0,
       seedText: typeof msg.seedText === 'string' ? msg.seedText.slice(0, 64) : String(msg.seed),
+      generation: msg.generation === 1 ? 1 : GENERATION,
       edits: msg.edits,
       spawn: hostPos,
       time: Number.isFinite(msg.time) ? msg.time : undefined,

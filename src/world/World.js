@@ -314,7 +314,7 @@ export class World {
 
   /**
    * Cambios de algunos chunks para guardar: [[clave, Uint16Array], ...] con
-   * [índice, id, índice, id, ...] (índice < 32768 e id < 256: entran en 16 bits).
+   * [índice, id, índice, id, ...] (índice < 32768 e id < 1024: entran en 16 bits).
    * @param {Iterable<string>} keys claves de los chunks
    */
   exportChunkEdits(keys) {
@@ -553,7 +553,8 @@ export class World {
   _generateInWorker(cx, cz) {
     const key = chunkKey(cx, cz);
     this._generating.add(key);
-    this.workers.run({ type: 'generate', seed: this.generator.seed, cx, cz }, [], (result) => {
+    const job = { type: 'generate', seed: this.generator.seed, generation: this.generator.generation, cx, cz };
+    this.workers.run(job, [], (result) => {
       this._generating.delete(key);
       if (!result || this._disposed) return;
       this._pump(); // el worker quedó libre: el siguiente de la cola

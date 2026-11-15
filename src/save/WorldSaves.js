@@ -10,6 +10,7 @@
 
 import { SaveStore } from './SaveStore.js';
 import { START_TIME } from '../render/Sky.js';
+import { GENERATION } from '../world/TerrainGen.js';
 
 /** Segundos entre autoguardados. */
 const AUTOSAVE_INTERVAL = 30;
@@ -153,6 +154,8 @@ export class WorldSaves {
       name: cur.name,
       seed: g.options.seed,
       seedText: g.options.seedText,
+      // Versión del generador del terreno (ver TerrainGen.GENERATION).
+      generation: g.generator.generation,
       createdAt: cur.createdAt,
       playedAt: Date.now(),
       player: {
@@ -204,6 +207,8 @@ export class WorldSaves {
     return {
       seed: Number.isInteger(meta.seed) ? meta.seed >>> 0 : 0,
       seedText: typeof meta.seedText === 'string' ? meta.seedText : String(meta.seed),
+      // Los guardados de antes de la etapa 12 no la tienen: terreno de antes.
+      generation: meta.generation === GENERATION ? GENERATION : 1,
       edits,
       player,
       hotbar: Array.isArray(meta.hotbar?.slots) ? meta.hotbar : null,

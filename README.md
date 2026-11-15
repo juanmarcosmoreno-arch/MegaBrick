@@ -136,8 +136,8 @@ Algunas cosas siguen pidiendo el teclado o el mouse: escribir (nombre de un mund
 - **Losas:** medio bloque. Van abajo, salvo que apuntes a un techo o a la mitad de arriba de una pared: ahí van arriba. Una losa también se sube caminando (un bloque entero sigue pidiendo saltar).
 - **Puertas:** ocupan dos bloques de alto y se ponen mirando hacia donde mirás, con la bisagra a tu izquierda. Clic derecho (o el gatillo izquierdo del joystick) las abre y las cierra; rotas, se va la puerta entera. Abiertas dejan pasar; cerradas, no.
 - **Faroles:** brillan solos, igual de día que de noche (no iluminan lo de alrededor).
-- **Cercos, rejas y paneles de vidrio:** se unen solos con el de al lado y con los bloques enteros. Los cercos no se saltan (ni los saltan los animales: sirven de corral).
-- **Tranqueras y trampillas:** se ponen mirando hacia donde mirás y se abren y se cierran con clic derecho, como las puertas. La tranquera abierta deja pasar; la trampilla cerrada se pisa y abierta deja caer al hueco.
+- **Cercos, rejas y paneles de vidrio:** se unen solos con el de al lado y con los bloques enteros (también el vidrio). Los cercos no se saltan ni se trepan desde el agua (tampoco los animales: sirven de corral).
+- **Tranqueras y trampillas:** se ponen mirando hacia donde mirás y se abren y se cierran con clic derecho, como las puertas. La tranquera abierta deja pasar, y los cercos se unen a ella por sus extremos. La trampilla va abajo en su celda, o arriba (para tapar un hueco del piso) si apuntás a un techo o a la mitad de arriba de una cara; cerrada se pisa, y abierta deja pasar; con una escalera de mano abajo, se trepa (para salir de un pozo).
 - **Escaleras de mano:** se ponen contra la pared apuntada. Para subir, avanzá o apretá Espacio; para bajar, Shift; si no tocás nada, te quedás agarrado.
 - **Plantas y flores:** van sobre césped o tierra (el hongo, también sobre piedra), se atraviesan y salen con un toque. Si sacás el bloque de abajo, se caen; si ponés un bloque apuntándoles, lo reemplazan.
 - **Alfombras y vidrios de colores:** las alfombras son una capa finita que se pisa; los vidrios dejan ver a través, teñido.
@@ -192,6 +192,7 @@ El mundo es infinito y se genera a medida que te movés, en chunks de 16 × 16 b
 - **Agua:** el mar está a una altura fija (y = 40) y es semitransparente. Hay arena en costas y fondos poco profundos.
 - **Árboles:** se agrupan en bosques y también aparecen sueltos. En las alturas son pinos, y en el llano a veces hay jacarandás en flor. Sus copas pasan de un chunk a otro sin cortarse.
 - **Plantas:** pasto alto suelto, flores (margaritas, ceibos y flores celestes) por manchones, y en el bosque helechos y algún hongo. Las cumbres más altas tienen nieve.
+- **Mundos de antes:** cada mundo recuerda con qué versión del generador se creó. Los guardados antes de la etapa 12 se siguen generando igual que siempre (solo con los árboles de antes, sin plantas ni nieve), así lo que construiste o sacaste queda como estaba; los nuevos traen todo lo nuevo.
 - **Minerales:** cobrizo, azurita y solarita aparecen en vetas dentro de la piedra. Cuanto más raro el mineral, más hondo.
 - **Carga de chunks:** se generan y mallan en segundo plano (ver [Rendimiento](#rendimiento)), primero los más cercanos al jugador y los que tiene adelante. Los lejanos se liberan de la memoria.
 - **Niebla:** tiene el color del horizonte (cambia con la hora) y tapa el borde del área cargada.
@@ -338,8 +339,8 @@ src/
 | 129 – 132 | Grava, arcilla, nieve, hielo | |
 | 133 – 153 | Empedrado con musgo, granito y basalto, con escalones y losas | |
 | 154 | Cactus | Un poco más angosto que un bloque |
-| 155 – 171 | Pino y jacarandá: tronco, follaje y tablones (con escalones y losas) | |
-| 172 – 178 | Pasto alto, helecho, margarita, flor de ceibo, flor celeste, hongo | Plantas: dos planos en X, se atraviesan |
+| 155 – 172 | Pino y jacarandá: tronco, follaje y tablones (con escalones y losas) | |
+| 173 – 178 | Pasto alto, helecho, margarita, flor de ceibo, flor celeste, hongo | Plantas: dos planos en X, se atraviesan |
 | 179 – 187 | Hormigón (con escalones y losas), baldosa calcárea, venecitas | |
 | 188 – 191 | Bloques de hierro, cobrizo, azurita y solarita | |
 | 192 – 205 | Chapa y chapa oxidada, con escalones y losas | |
@@ -347,8 +348,8 @@ src/
 | 212 – 215 | Cerco de madera, cerco oscuro, rejas, panel de vidrio | Un ID cada uno: se unen con los vecinos al dibujarlos |
 | 216 – 223 | Tranquera | 8 IDs: 4 orientaciones, cerrada o abierta |
 | 224 – 227 | Escalera de mano | Una por orientación |
-| 228 – 235 | Trampilla | 8 IDs: 4 orientaciones, cerrada o abierta |
-| 236 – 247 | Alfombras de los 12 colores del revoque | |
+| 228 – 243 | Trampilla | 16 IDs: 4 orientaciones, cerrada o abierta, abajo o arriba en su celda |
+| 244 – 255 | Alfombras de los 12 colores del revoque | |
 
 Cada escalón usa 4 IDs (uno por orientación) y cada losa 2 (abajo y arriba): en la hotbar y en el menú se ve uno solo, y al ponerlo se elige el que corresponde. Los IDs se guardan en los mundos, así que los bloques nuevos se agregan siempre al final. Los chunks guardan IDs de 16 bits: hay lugar para 1024 tipos de bloque.
 

@@ -516,8 +516,8 @@ export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
           for (let f = 0; f < 6; f++) {
             if ((f === 3 && lowered) || faceVisible(id, neighbor[f])) {
               emitFace(buf, pad, f, id, x, y, z, pi, box);
-            } else if (lowered && f !== 2 && SHAPE_BOXES[neighbor[f]]) {
-              // Agua de la superficie contra una losa, escalón o puerta: la
+            } else if (lowered && f !== 2 && (SHAPE_BOXES[neighbor[f]] || CONNECTED_BOXES[neighbor[f]])) {
+              // Agua de la superficie contra una losa, escalón, puerta o cerco: la
               // forma no tapa toda la cara. Se dibuja apenas corrida hacia
               // adentro de la forma, así las caras de la forma quedan
               // adelante (no parpadean) y no queda un hueco sin agua.

@@ -87,6 +87,7 @@ export class Animal {
     this._rest = 0;
     this._collidedH = false;
     this._climb = false; // adelante hay un escalón que se sube saltando
+    this._tallAhead = false; // adelante hay un cerco (no se trepa ni desde el agua)
     this._waterGrace = 0;
     this._near = FOLLOW_NEAR + ((id * 0.618) % 1) * FOLLOW_SPREAD;
     /** El modelo (lo arma y lo dibuja Animals.js). */
@@ -217,6 +218,7 @@ export class Animal {
     let speed = 0;
     let turn = TURN_SPEED;
     this._climb = false;
+    this._tallAhead = false;
     if (this.mode === 'wander' && this.target) {
       tx = this.target.x;
       tz = this.target.z;
@@ -253,6 +255,7 @@ export class Animal {
     const fz = -Math.cos(this.yaw);
     const ahead = groundBelow(world, p.x + fx * 0.8, p.y + 1.5, p.z + fz * 0.8, 4.5);
     const swimming = this.inWater || this._waterGrace > 0;
+    this._tallAhead = Boolean(ahead?.tall);
     const wall = ahead && !ahead.water && ahead.y - p.y > MAX_CLIMB;
     if (!swimming && (!ahead || wall || (ahead.water && !this.kind.likesWater && this.mode !== 'flee'))) {
       // Escapando o siguiendo a alguien, se frena en el borde; paseando, cambia de idea.
@@ -283,7 +286,7 @@ export class Animal {
       v.y += (deep ? 14 : -8) * dt;
       v.y = Math.max(-2, Math.min(2.2, v.y));
       // Contra la orilla, trepa para salir (también apenas asoma del agua).
-      if (this._collidedH && speed > 0) v.y = CLIMB_OUT_SPEED;
+      if (this._collidedH && speed > 0 && !this._tallAhead) v.y = CLIMB_OUT_SPEED;
     } else {
       // Choca contra un escalón de un bloque: salta.
       if (this._collidedH && this.onGround && speed > 0 && this._climb) v.y = JUMP_SPEED;
@@ -441,8 +444,8 @@ function solidAt(world, x, y, z) {
  * El piso debajo de (x, z) bajando desde `fromY` hasta `depth` bloques:
  * {y (donde apoyan los pies), water} o null si no hay (precipicio). Cuenta
  * lo que hay justo en ese punto (una losa, la mitad baja de un escalón; una
- * puerta abierta, que está a un costado, no; un cerco cuenta más alto, así
- * que no se salta). El follaje no cuenta como piso: así no se suben a las
+ * puerta abierta, que está a un costado, no; un cerco cuenta como pared de
+ * un bloque y medio en toda su celda, así que no se salta). El follaje no cuenta como piso: así no se suben a las
  * copas de los árboles.
  */
 export function groundBelow(world, x, fromY, z, depth) {
@@ -455,6 +458,9 @@ export function groundBelow(world, x, fromY, z, depth) {
     const id = world.getBlock(bx, y, bz);
     if (getBlock(id).leaves) return null;
     if (getBlock(id).liquid) return { y: y + 1, water: true };
+    // Un cerco o una tranquera cerrada: pared en toda la celda (sus palos
+    // son finos, pero no se pasan ni se trepan, tampoco desde el agua).
+    if (collisionBoxesAt(world, bx, y, bz, id)?.some((c) => c[4] > 1)) return { y: y + 1.5, water: false, tall: true };
     const h = topAt(world, bx, y, bz, id, lx, lz);
     if (h === null) continue;
     // Tiene que haber lugar arriba (dos bloques libres).

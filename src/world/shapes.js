@@ -21,7 +21,15 @@ export const SIDES = Object.freeze([
 
 /** Grupo con el que se une cada ID: 0 ninguno, 1 cercos (y tranqueras), 2 paneles. */
 const GROUP = new Uint8Array(MAX_BLOCK_IDS);
-/** Bloques enteros (opacos y sin forma): todo cerco o panel se une con ellos. */
+/**
+ * Tranqueras: de qué lados se une (bits de la máscara): solo por sus
+ * extremos, a lo largo de su eje (una mirando al norte, al este y al oeste).
+ */
+const GATE_SIDES = new Uint8Array(MAX_BLOCK_IDS);
+/**
+ * Bloques enteros (cubos sólidos sin forma, también el vidrio y el
+ * follaje): todo cerco o panel se une con ellos.
+ */
 const FULL = new Uint8Array(MAX_BLOCK_IDS);
 /** Cajas por ID y máscara (solo los que se unen). */
 const SHAPE_BY_MASK = new Array(MAX_BLOCK_IDS).fill(null);
@@ -58,8 +66,11 @@ function build(parts, mask, collision) {
 
 for (const block of BLOCKS) {
   if (!block) continue;
-  FULL[block.id] = block.opaque && !block.boxes ? 1 : 0;
-  if (block.shape === SHAPE.GATE) GROUP[block.id] = 1;
+  FULL[block.id] = block.solid && !block.boxes && !block.connect && !block.liquid ? 1 : 0;
+  if (block.shape === SHAPE.GATE) {
+    GROUP[block.id] = 1;
+    GATE_SIDES[block.id] = block.facing % 2 === 0 ? 2 | 8 : 1 | 4;
+  }
   if (!block.connect) continue;
   GROUP[block.id] = block.connect === 'fence' ? 1 : 2;
   const parts = PARTS[block.connect];
@@ -73,9 +84,15 @@ for (const block of BLOCKS) {
   }
 }
 
-/** ¿El bloque `id` se une con su vecino `n`? (solo para los que se unen) */
-export function joins(id, n) {
-  return FULL[n] === 1 || (GROUP[n] !== 0 && GROUP[n] === GROUP[id]);
+/**
+ * ¿El bloque `id` se une con su vecino `n`, que está del lado `side` (0
+ * norte, 1 este, 2 sur, 3 oeste)? (solo para los que se unen)
+ */
+export function joins(id, n, side) {
+  if (FULL[n] === 1) return true;
+  if (GROUP[n] === 0 || GROUP[n] !== GROUP[id]) return false;
+  // A una tranquera, solo por sus extremos: desde el lado opuesto al nuestro.
+  return GATE_SIDES[n] === 0 || (GATE_SIDES[n] & (1 << ((side + 2) % 4))) !== 0;
 }
 
 /** ¿El bloque se une con sus vecinos? */
@@ -85,7 +102,7 @@ export function isConnected(id) {
 
 /** Máscara de uniones a partir de los IDs de los 4 vecinos (norte, este, sur, oeste). */
 export function maskOf(id, north, east, south, west) {
-  return (joins(id, north) ? 1 : 0) | (joins(id, east) ? 2 : 0) | (joins(id, south) ? 4 : 0) | (joins(id, west) ? 8 : 0);
+  return (joins(id, north, 0) ? 1 : 0) | (joins(id, east, 1) ? 2 : 0) | (joins(id, south, 2) ? 4 : 0) | (joins(id, west, 3) ? 8 : 0);
 }
 
 /** Cajas que se ven de un cerco o panel con esa máscara. */
@@ -97,7 +114,7 @@ function maskAt(world, x, y, z, id) {
   let mask = 0;
   for (let side = 0; side < 4; side++) {
     const [dx, dz] = SIDES[side];
-    if (joins(id, world.getBlock(x + dx, y, z + dz))) mask |= 1 << side;
+    if (joins(id, world.getBlock(x + dx, y, z + dz), side)) mask |= 1 << side;
   }
   return mask;
 }

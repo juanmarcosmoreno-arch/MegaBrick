@@ -102,7 +102,8 @@ export const CATEGORIES = Object.freeze([
  *   (null: se atraviesa, como una tranquera abierta o una escalera de mano).
  * - connect: los cercos ('fence') y paneles ('pane') se unen con sus
  *   vecinos (ver shapes.js).
- * - climbable: se trepa (escalera de mano).
+ * - climbable: se trepa (escalera de mano). climbableOverLadder: se trepa
+ *   si tiene una escalera de mano abajo (la trampilla abierta).
  * - toggle: el bloque en que se convierte al usarlo (clic derecho): la
  *   tranquera o la trampilla abierta o cerrada.
  * - soil: una planta, que va sobre estos bloques y se rompe si le sacan el
@@ -453,7 +454,7 @@ function addConnected(key, name, tiles, connect, props) {
  * Bloques que se abren y se cierran (tranquera, trampilla): 8 IDs (4
  * orientaciones × cerrada/abierta). `closed`/`open`: cajas mirando al norte.
  */
-function addToggle(key, name, tiles, shape, { closed, open, closedCollision, openCollision = null, ...props }) {
+function addToggle(key, name, tiles, shape, { closed, open, closedCollision, openCollision = null, openProps = {}, ...props }) {
   const ids = [];
   for (let facing = 0; facing < 4; facing++) {
     for (const isOpen of [false, true]) {
@@ -468,6 +469,7 @@ function addToggle(key, name, tiles, shape, { closed, open, closedCollision, ope
           facing,
           open: isOpen,
           ...props,
+          ...(isOpen ? openProps : {}),
         }),
       );
     }
@@ -601,16 +603,33 @@ addConnected('GLASS_PANE', 'Panel de vidrio', 'glass', 'pane', {
     BLOCKS[id] = Object.freeze({ ...BLOCKS[id], item: ids[0], variants: Object.freeze(ids), category: id === ids[0] ? 'fences' : null });
   }
 }
-addToggle('TRAPDOOR_WOOD', 'Trampilla', 'trapdoor', SHAPE.TRAPDOOR, {
-  closed: [[0, 0, 0, 1, 3 / 16, 1]],
-  open: [[0, 0, 0, 1, 1, 3 / 16]],
-  closedCollision: [[0, 0, 0, 1, 3 / 16, 1]],
-  openCollision: [[0, 0, 0, 1, 1, 3 / 16]],
-  layer: LAYER.CUTOUT,
-  sound: 'wood',
-  hardness: 0.5,
-  category: 'fences',
-});
+{
+  // Trampilla: abajo en su celda, o arriba (tapa de un hueco del piso) si
+  // se apunta a un techo o a la mitad de arriba de una cara, como la losa.
+  // Abierta queda parada contra un costado y, con una escalera de mano
+  // abajo, se trepa (para salir de un pozo).
+  const trapdoor = (key, y0) => {
+    const closed = [[0, y0, 0, 1, y0 + 3 / 16, 1]];
+    const open = [[0, 0, 0, 1, 1, 3 / 16]];
+    return addToggle(key, 'Trampilla', 'trapdoor', SHAPE.TRAPDOOR, {
+      closed,
+      open,
+      closedCollision: closed,
+      openCollision: open,
+      openProps: { climbableOverLadder: true },
+      layer: LAYER.CUTOUT,
+      sound: 'wood',
+      hardness: 0.5,
+      upper: y0 > 0,
+      category: y0 > 0 ? null : 'fences',
+    });
+  };
+  const bottom = trapdoor('TRAPDOOR_WOOD', 0);
+  const top = trapdoor('TRAPDOOR_WOOD_TOP', 13 / 16);
+  // Las de arriba se ven en la hotbar como la de abajo; la de abajo sabe cuáles son.
+  for (let id = top; id < top + 8; id++) BLOCKS[id] = Object.freeze({ ...BLOCKS[id], item: bottom });
+  for (let id = bottom; id < bottom + 8; id++) BLOCKS[id] = Object.freeze({ ...BLOCKS[id], upperVariants: BLOCKS[top].variants });
+}
 // Alfombras de los colores del revoque.
 for (const [key, name] of [
   ['WHITE', 'blanca'],

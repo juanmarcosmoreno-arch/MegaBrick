@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { moveAxis, overlapsSolid } from '../world/collision.js';
 import { getBlock } from '../world/blocks.js';
+import { collisionBoxesAt } from '../world/shapes.js';
 import { PAD } from './Gamepad.js';
 
 const HALF_PI = Math.PI / 2 - 0.001;
@@ -211,12 +212,14 @@ export class Player {
     }
     // Saliendo del agua contra una orilla: se trepa (si no, sería imposible
     // salir, porque la superficie del agua queda más baja que la orilla).
+    // (Un cerco, no: no se trepa ni desde el agua.)
     const climbing =
       !this.flying &&
       jump &&
       this._collidedH &&
       this._waterGrace > 0 &&
-      this.position.y < this._climbTop;
+      this.position.y < this._climbTop &&
+      !this._tallAhead(world);
     if (climbing && v.y < WATER_CLIMB_SPEED) {
       v.y = WATER_CLIMB_SPEED;
       vyMove = WATER_CLIMB_SPEED;
@@ -311,6 +314,24 @@ export class Player {
   }
 
   /** Mueve sobre un eje (0 = X, 1 = Y, 2 = Z); true si chocó (ver collision.js). */
+  /**
+   * ¿Hay un cerco (algo que choca más alto que un bloque) justo adelante,
+   * hacia donde se mueve, a la altura de los pies o del cuerpo?
+   */
+  _tallAhead(world) {
+    const p = this.position;
+    const len = Math.hypot(this._wish.x, this._wish.z);
+    if (len < 1e-6) return false;
+    const reach = this.width / 2 + 0.3;
+    const x = Math.floor(p.x + (this._wish.x / len) * reach);
+    const z = Math.floor(p.z + (this._wish.z / len) * reach);
+    for (let by = Math.floor(p.y) - 1; by <= Math.floor(p.y) + 1; by++) {
+      const boxes = collisionBoxesAt(world, x, by, z, world.getBlock(x, by, z));
+      if (boxes?.some((b) => b[4] > 1)) return true;
+    }
+    return false;
+  }
+
   /** ¿Alguna celda que ocupa el cuerpo tiene un bloque que se trepa? */
   _touchesClimbable(world) {
     const p = this.position;
@@ -318,7 +339,9 @@ export class Player {
     for (let by = Math.floor(p.y); by <= Math.floor(p.y + this.height - 0.01); by++) {
       for (let bz = Math.floor(p.z - half); bz <= Math.floor(p.z + half); bz++) {
         for (let bx = Math.floor(p.x - half); bx <= Math.floor(p.x + half); bx++) {
-          if (getBlock(world.getBlock(bx, by, bz)).climbable) return true;
+          const b = getBlock(world.getBlock(bx, by, bz));
+          if (b.climbable) return true;
+          if (b.climbableOverLadder && getBlock(world.getBlock(bx, by - 1, bz)).climbable) return true;
         }
       }
     }

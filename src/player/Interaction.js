@@ -268,6 +268,7 @@ export class BlockInteraction {
    * losa arriba si se apunta a un techo o a la mitad de arriba de una cara.
    */
   _variantFor(block, t) {
+    if (block.shape === SHAPE.TRAPDOOR && block.upperVariants && upperHalf(t)) return block.upperVariants[this.facing];
     if (block.shape === SHAPE.STAIRS || block.shape === SHAPE.GATE || block.shape === SHAPE.TRAPDOOR) {
       return block.variants[this.facing];
     }
@@ -278,11 +279,7 @@ export class BlockInteraction {
       const f = nz === -1 ? 0 : nx === 1 ? 1 : nz === 1 ? 2 : nx === -1 ? 3 : (this.facing + 2) % 4;
       return block.variants[f];
     }
-    if (block.shape === SHAPE.SLAB && block.slabTop) {
-      const [, ny] = t.normal;
-      const upper = ny === -1 || (ny === 0 && t.point[1] - Math.floor(t.point[1]) > 0.5);
-      return upper ? block.slabTop : block.id;
-    }
+    if (block.shape === SHAPE.SLAB && block.slabTop) return upperHalf(t) ? block.slabTop : block.id;
     return block.id;
   }
 
@@ -342,6 +339,12 @@ export class BlockInteraction {
     const cell = [x, y, z];
     return boxes.some((b) => [0, 1, 2].every((a) => cell[a] + b[a] < hi[a] - EPS && cell[a] + b[a + 3] > lo[a] + EPS));
   }
+}
+
+/** ¿Va arriba en su celda? Si se apunta a un techo o a la mitad de arriba de una cara. */
+function upperHalf(t) {
+  const [, ny] = t.normal;
+  return ny === -1 || (ny === 0 && t.point[1] - Math.floor(t.point[1]) > 0.5);
 }
 
 /** ¿Se usa con clic derecho (puerta, tranquera, trampilla) en vez de poner algo contra él? */

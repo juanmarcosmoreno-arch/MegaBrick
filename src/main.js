@@ -8,7 +8,7 @@ import { START_TIME, Sky } from './render/Sky.js';
 import { World, toChunkCoord } from './world/World.js';
 import { createChunkWorkers } from './world/ChunkWorkers.js';
 import { BLOCK, getBlock } from './world/blocks.js';
-import { TerrainGenerator, parseSeed } from './world/TerrainGen.js';
+import { GENERATION, TerrainGenerator, parseSeed } from './world/TerrainGen.js';
 import { Player } from './player/Player.js';
 import { Controls } from './player/Controls.js';
 import { PAD } from './player/Gamepad.js';
@@ -315,6 +315,7 @@ class Game {
    * @param {object} o
    * @param {number} o.seed
    * @param {string} [o.seedText]
+   * @param {number} [o.generation] versión del generador (los mundos nuevos, la actual)
    * @param {unknown} [o.edits] cambios (formato de World.exportEdits)
    * @param {{x: number, y: number, z: number}} [o.spawn] dónde aparece (si no, se busca)
    * @param {{yaw: number, pitch: number, flying?: boolean}} [o.look] hacia dónde mira y si vuela
@@ -322,13 +323,13 @@ class Game {
    * @param {number} [o.time] hora del día (0 a 1; si no se indica, sigue la actual)
    * @param {object} [o.save] datos del guardado de este mundo (ver WorldSaves.setCurrent)
    */
-  loadWorld({ seed, seedText, edits, spawn, look, hotbar, time, save }) {
+  loadWorld({ seed, seedText, generation = GENERATION, edits, spawn, look, hotbar, time, save }) {
     this.saves.saveIfWorthIt();
     this.world.dispose();
     this.scene.remove(this.world.group);
     this.options.seed = seed;
     this.options.seedText = seedText ?? String(seed);
-    this.generator = new TerrainGenerator(seed);
+    this.generator = new TerrainGenerator(seed, generation);
     this.world = new World(this.materials, this.generator, {
       renderDistance: this.options.renderDistance,
       workers: this.chunkWorkers,
@@ -353,6 +354,7 @@ class Game {
     this.loadWorld({
       seed: data.seed,
       seedText: data.seedText,
+      generation: data.generation,
       edits: data.edits,
       spawn: data.player,
       look: data.player ?? { yaw: 0, pitch: -0.1 },

@@ -1,7 +1,7 @@
 // Web Worker que genera y malla chunks fuera del hilo principal (así el juego
 // no se traba mientras carga terreno). Recibe trabajos de ChunkWorkers:
 //
-// - { type: 'generate', id, seed, cx, cz } → { id, data, maxY }
+// - { type: 'generate', id, seed, generation, cx, cz } → { id, data, maxY }
 // - { type: 'mesh', id, padded, maxY } → { id, mesh, padded }
 //
 // Los arrays viajan transferidos (sin copiarse); la copia con borde vuelve
@@ -17,7 +17,9 @@ self.onmessage = (event) => {
   const job = event.data;
   try {
     if (job.type === 'generate') {
-      if (generator?.seed !== job.seed) generator = new TerrainGenerator(job.seed);
+      if (generator?.seed !== job.seed || generator.generation !== job.generation) {
+        generator = new TerrainGenerator(job.seed, job.generation);
+      }
       const { data, maxY } = generator.generateChunk(job.cx, job.cz);
       self.postMessage({ id: job.id, data, maxY }, [data.buffer]);
     } else if (job.type === 'mesh') {

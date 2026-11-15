@@ -14,6 +14,14 @@ import { createNoise2D } from 'simplex-noise';
 import { BLOCK, getBlock } from './blocks.js';
 import { CHUNK_HEIGHT, CHUNK_SIZE, CHUNK_VOLUME, Chunk } from './Chunk.js';
 
+/**
+ * Versión del generador. Los mundos guardan diferencias contra el terreno
+ * generado, así que uno guardado con una versión se sigue generando con
+ * esa: 1 es el terreno de las etapas 2 a 11 (solo robles, sin plantas ni
+ * nieve); 2 suma pinos, jacarandás, nieve y plantas (etapa 12).
+ */
+export const GENERATION = 2;
+
 /** Nivel del mar: el agua llena todo lo que quede por debajo. */
 export const SEA_LEVEL = 40;
 
@@ -89,9 +97,11 @@ const TREE_KINDS = {
 export class TerrainGenerator {
   /**
    * @param {number} seed semilla del mundo (entero de 32 bits)
+   * @param {number} [generation] versión del generador (ver GENERATION)
    */
-  constructor(seed) {
+  constructor(seed, generation = GENERATION) {
     this.seed = seed >>> 0;
+    this.generation = generation === 1 ? 1 : GENERATION;
     // Un ruido distinto para cada rasgo, todos derivados de la semilla.
     const noise = (salt) => createNoise2D(mulberry32(hash3(this.seed, salt, 7919)));
     this.nContinent = noise(1); // elevación general (llanuras / zonas bajas)
@@ -167,7 +177,7 @@ export class TerrainGenerator {
         let top;
         let under;
         if (rocky) {
-          top = h >= SNOW_LINE ? BLOCK.SNOW : BLOCK.STONE;
+          top = h >= SNOW_LINE && this.generation >= 2 ? BLOCK.SNOW : BLOCK.STONE;
           under = BLOCK.STONE;
         } else if (beach) {
           // Costas y fondo poco profundo de arena; más hondo, tierra.
@@ -199,7 +209,7 @@ export class TerrainGenerator {
     maxY = Math.max(maxY, this._placeTrees(data, cx, cz));
 
     // 4) Pasto alto, helechos, flores y hongos sobre el césped libre.
-    maxY = Math.max(maxY, this._placePlants(data, cx, cz));
+    if (this.generation >= 2) maxY = Math.max(maxY, this._placePlants(data, cx, cz));
 
     return { data, maxY: Math.min(CHUNK_HEIGHT - 1, maxY) };
   }
@@ -247,7 +257,8 @@ export class TerrainGenerator {
     // En las alturas, pinos; en el llano y fuera del bosque, a veces un
     // jacarandá; si no, el árbol de siempre.
     let kind = 'oak';
-    if (ground >= PINE_LINE) kind = 'pine';
+    if (this.generation < 2) kind = 'oak';
+    else if (ground >= PINE_LINE) kind = 'pine';
     else if (forest <= 0.25 && hash01(this.seed, gx, gz, 5) < 0.3) kind = 'jacaranda';
     const extra = kind === 'pine' ? 3 : 0;
     const trunk = 4 + extra + Math.floor(hash01(this.seed, gx, gz, 4) * 3);

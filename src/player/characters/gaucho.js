@@ -18,8 +18,8 @@ const LEATHER = [92, 58, 36];
 const BOOT = [98, 62, 38];
 const SILVER = [206, 210, 216];
 const SILVER_DARK = [138, 142, 150];
-const FELT = [70, 54, 44];
-const FELT_DARK = [46, 36, 30];
+const FELT = [116, 86, 60];
+const FELT_DARK = [78, 56, 40];
 
 const SIDES = ['front', 'back', 'left', 'right', 'top', 'bottom'];
 
@@ -37,7 +37,7 @@ export const name = 'Gaucho';
 /** La cara: ojos oscuros, cejas gruesas y la boca bajo el bigote. */
 export function face(b, expr, blink) {
   paintFace(b, expr, blink, { eye: EYE, mouth: MOUTH, brow: HAIR, eyeY: 4 });
-  // El bigote se vuelve a pintar encima de la boca cuando está serio o normal.
+  // Boca en reposo un poco más oscura, como en la sombra del bigote.
   if (expr === 'normal') b.rect(4, 8, 2, 1, tone(MOUTH, 0.9));
 }
 
@@ -67,7 +67,7 @@ export const paint = {
     }
     // Adelante: sombra del ala, nariz, bigote grande y barba de unos días.
     const f = brush(ctx, r.front);
-    f.rect(0, 0, 10, 2, HAIR);
+    f.rect(0, 0, 10, 2, tone(SKIN, 0.72)); // a la sombra del ala
     for (let x = 0; x < 10; x++) f.px(x, 2, tone(SKIN, 0.86));
     f.rect(0, 2, 1, 3, tone(HAIR, 1.2)); // patillas
     f.rect(9, 2, 1, 3, tone(HAIR, 1.2));
@@ -95,20 +95,20 @@ export const paint = {
       const b = brush(ctx, r[k]);
       // Faja oscura con rayitas.
       for (let y = 5; y < 9; y++) for (let x = 0; x < b.w; x++) b.px(x, y, tone(FAJA, 0.9 + rnd() * 0.2));
-      b.rect(0, 7, b.w, 1, tone(FAJA, 1.5));
+      b.rect(0, 6, b.w, 1, tone(FAJA, 1.6));
       // Rastra: tira de cuero con monedas de plata.
-      b.rect(0, 6, b.w, 1, LEATHER);
-      for (let x = 0; x < b.w; x += 2) b.px(x, 6, SILVER);
+      b.rect(0, 7, b.w, 1, LEATHER);
+      for (let x = 0; x < b.w; x += 2) b.px(x, 7, SILVER);
     }
     // La pieza grande de la rastra, al frente.
     const f = brush(ctx, r.front);
-    f.rect(2, 6, 4, 2, SILVER);
-    f.rect(3, 6, 2, 1, [236, 238, 242]);
-    f.px(2, 7, SILVER_DARK);
-    f.px(5, 7, SILVER_DARK);
-    f.rect(3, 7, 2, 1, tone(SILVER, 0.85));
-    f.px(1, 7, SILVER_DARK); // cadenitas
-    f.px(6, 7, SILVER_DARK);
+    f.rect(2, 7, 4, 2, SILVER);
+    f.rect(3, 7, 2, 1, [236, 238, 242]);
+    f.px(2, 8, SILVER_DARK);
+    f.px(5, 8, SILVER_DARK);
+    f.rect(3, 8, 2, 1, tone(SILVER, 0.85));
+    f.px(1, 8, SILVER_DARK); // cadenitas
+    f.px(6, 8, SILVER_DARK);
     // Botonera de la camisa.
     for (let y = 1; y < 5; y += 2) f.px(4, y, tone(SHIRT, 0.82));
   },
@@ -198,6 +198,7 @@ export function accessories(kit, parts) {
     }
   });
   brim.position.y = 8.5 * PX;
+  brim.rotation.x = 0.1; // el ala un poco caída adelante
   parts.head.add(brim);
 
   const crown = kit.box(12, 3, 12, (ctx, r, p, rnd) => {
@@ -221,7 +222,7 @@ export function accessories(kit, parts) {
   // ---- Poncho: cae de los hombros, con guarda de rombos y flecos ----
   const poncho = kit.box(
     16,
-    6,
+    7,
     8,
     (ctx, r, p, rnd) => {
       fill(ctx, r, p.color, rnd, 0.05);
@@ -229,17 +230,23 @@ export function accessories(kit, parts) {
       for (const k of ['front', 'back', 'left', 'right']) {
         const b = brush(ctx, r[k]);
         // Tejido: rayitas verticales finas.
-        for (let y = 0; y < 3; y++) for (let x = 1; x < b.w; x += 3) b.px(x, y, p.colorDark, 0.5);
-        // Guarda: franja oscura con rombos claros.
-        b.rect(0, 3, b.w, 2, p.colorDeep);
+        for (let y = 0; y < 3; y++) for (let x = 1; x < b.w; x += 3) b.px(x, y, p.colorDark, 0.45);
+        b.rect(0, 0, b.w, 1, p.colorLight, 0.25);
+        // Guarda: dos líneas oscuras con una cadena de rombos clara al medio.
+        b.rect(0, 3, b.w, 3, p.colorDark);
+        b.rect(0, 3, b.w, 1, p.colorDeep);
         for (let x = 0; x < b.w; x++) {
-          if (x % 4 === 1 || x % 4 === 2) b.px(x, 3, CREAM);
-          if (x % 4 === 0 || x % 4 === 3) b.px(x, 4, tone(CREAM, 0.9));
+          const m = x % 4;
+          b.px(x, 4, m === 0 ? p.colorDeep : m === 2 ? p.colorLight : CREAM);
+          if (m === 2) {
+            b.px(x, 3, tone(CREAM, 0.9));
+            b.px(x, 5, tone(CREAM, 0.9));
+          }
         }
         // Flecos: uno sí y uno no.
         for (let x = 0; x < b.w; x++) {
-          if (x % 2 === 0) b.px(x, 5, tone(p.colorLight, 0.95 + rnd() * 0.1));
-          else b.clear(x, 5, 1, 1);
+          if (x % 2 === 0) b.px(x, 6, tone(CREAM, 0.88 + rnd() * 0.12));
+          else b.clear(x, 6, 1, 1);
         }
       }
     },
@@ -250,20 +257,22 @@ export function accessories(kit, parts) {
 
   // ---- Pañuelo anudado bajo el mentón ----
   const scarf = kit.box(
-    4,
+    6,
     3,
     1,
     (ctx, r, p, rnd) => {
       fill(ctx, r, SHIRT, rnd, 0.03);
       for (const k of ['front', 'back']) {
         const b = brush(ctx, r[k]);
-        b.px(0, 0, p.colorDeep);
-        b.px(3, 0, p.colorDeep);
-        b.rect(1, 0, 2, 1, tone(SHIRT, 0.82)); // el nudo
-        b.px(2, 1, p.colorDeep);
+        // Lunares del color elegido y el nudo al medio.
+        for (const [x, y] of [[0, 0], [5, 0], [1, 1], [4, 1]]) b.px(x, y, p.colorDark);
+        b.rect(2, 0, 2, 1, tone(SHIRT, 0.8));
+        b.px(2, 1, tone(SHIRT, 0.9));
         b.clear(0, 1, 1, 2);
-        b.clear(3, 1, 1, 2);
-        b.clear(2, 2, 1, 1);
+        b.clear(5, 1, 1, 2);
+        b.clear(1, 2, 1, 1);
+        b.clear(4, 2, 1, 1);
+        b.px(2, 2, tone(SHIRT, 0.86));
       }
     },
     [0.5, 1, 0],

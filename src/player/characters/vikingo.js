@@ -183,8 +183,7 @@ export const paint = {
       for (let x = 0; x < b.w; x++) b.px(x, 0, tone(pal.color, 0.92 + rnd() * 0.1));
       b.rect(0, 1, b.w, 1, pal.colorDeep);
       for (let x = (k === 'front' ? 1 : 0); x < b.w; x += 2) b.px(x, 1, pal.colorLight);
-      // Lana con vetas verticales y tiras de cuero cruzadas en X.
-      for (let y = 2; y < 6; y++) for (let x = 1; x < b.w; x += 2) b.px(x, y, tone(WOOL, 0.86));
+      // Lana con tiras de cuero cruzadas en X.
       for (const [x, y] of [[0, 2], [3, 2], [1, 3], [2, 3], [1, 4], [2, 4], [0, 5], [3, 5]]) {
         b.px(x, y, tone(STRAP, x === 1 || x === 3 ? 0.84 : 1));
       }

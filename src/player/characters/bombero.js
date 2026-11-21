@@ -37,7 +37,9 @@ function cloth(b, pal, rnd) {
 /** La cara: ojos celestes, cejas coloradas, cachetes rosados y bigote. */
 export function face(b, expr, blink) {
   const brow = tone(HAIR, 0.85);
-  paintFace(b, expr, blink, { eye: [58, 104, 150], mouth: [150, 64, 60], brow: expr === 'sorprendido' ? null : brow });
+  // Boca rosada (no un agujero) para que no compita con el bigote; abierta sí, oscura.
+  const mouth = expr === 'sorprendido' ? [110, 44, 44] : [198, 112, 100];
+  paintFace(b, expr, blink, { eye: [58, 104, 150], mouth, brow: expr === 'sorprendido' ? null : brow });
   if (expr === 'sorprendido') {
     // Las cejas no pueden subir más: arriba está el casco.
     b.rect(2, 2, 2, 1, brow);

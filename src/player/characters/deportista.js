@@ -71,8 +71,7 @@ export function face(b, expr, blink) {
     // Cejas gruesas.
     if (expr === 'determinado') {
       b.px(outer, ey - 2, brow);
-      b.rect(inner, ey - 1, 1, 1, brow);
-      b.px(inner, ey - 2, brow);
+      b.px(inner, ey - 1, brow);
     } else if (expr === 'sorprendido') {
       b.rect(x, ey - 2, 2, 1, tone(brow, 1.3));
     } else {
@@ -151,8 +150,9 @@ export const paint = {
     f.px(2, 1, t);
     f.px(5, 1, t);
     // Escudo (lado izquierdo del pecho).
-    f.px(6, 3, [244, 206, 70]);
-    f.px(6, 4, tone([244, 206, 70], 0.8));
+    const crest = t === WHITE ? [244, 206, 70] : WHITE;
+    f.px(6, 3, crest);
+    f.px(6, 4, tone(crest, 0.8));
     f.px(5, 3, tone(t, 0.9));
     // Ruedo.
     for (const k of SIDES) brush(ctx, r[k]).rect(0, 8, r[k].w, 1, pal.colorDark);

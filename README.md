@@ -243,11 +243,12 @@ La meta es 60 cuadros por segundo a distancia 8 en una PC o Mac común.
 
 ## Personaje
 
-El protagonista de Megabrick es **Coco**, un monstruito de gomita: una bola brillante que es cabeza y cuerpo a la vez, violeta adelante y naranja y amarilla en la espalda, llena de bultitos y gotitas amarillas. Tiene ojos saltones con párpados pesados (cara de aburrido), una boca ancha con colmillos, antena en rulo, brazos finitos con pinzas y patas flacas con pies grandes de tres garras. Contrasta con el mundo de bloques pixel art. Se arma por código: geometrías y texturas se generan en el momento, sin imágenes externas.
+Se elige en la pantalla de inicio, entre ocho personajes de bloques con cabeza grande: **Normal**, **Soldado**, **Vikingo**, **Deportista**, **Skater**, **Gaucho**, **Astronauta** y **Bombero**. Todos comparten el mismo muñeco (cabeza, cuerpo, brazos y piernas) y cada uno tiene su ropa, su cara y sus accesorios (cascos, sombrero, gorra, mochila...). Se arman por código: las texturas se pintan en pixel art en el momento, sin imágenes externas.
 
-- **Colores:** violeta (el Coco original), verde, azul, rojo, amarillo y negro. El color cambia el violeta del cuerpo; el degradé cálido y las manchas se ajustan para que se vean en todos. Se elige en la pantalla de inicio y queda guardado en el navegador. En la espalda tiene manchones de su color, así se lo reconoce desde atrás en el multijugador.
-- **Expresiones:** normal (aburrido), feliz (sonrisa enorme y un bailecito), sorprendido (abre los brazos) y determinado (ceño fruncido y colmillos), más parpadeo, mirada que se mueve y algún suspiro. En la pantalla de inicio las va mostrando una por una. En el juego se pone feliz cuando sube volando y pone cara de decidido mientras rompe bloques.
-- **Animación:** respira, la antena se mece como un resorte, camina y corre con los pies grandes (la bola rebota y se aplasta al pisar), vuela con los brazos abiertos y, al romper o poner, pica con la pinza derecha, donde lleva el bloque elegido. De noche baja el brillo propio.
+- **Color de la ropa:** violeta, verde, azul, rojo, amarillo o negro. Cambia la parte principal de la ropa de cada personaje (la remera, el uniforme, el poncho...), así se distinguen los jugadores en el multijugador. El personaje y el color quedan guardados en el navegador.
+- **Expresiones:** normal, feliz, sorprendido y determinado, más parpadeo. En la pantalla de inicio las va mostrando una por una. En el juego se pone feliz cuando sube volando y pone cara de decidido mientras rompe bloques.
+- **Animación:** respira, camina y corre moviendo brazos y piernas, vuela con los brazos abiertos, mira arriba y abajo con la cabeza y, al romper o poner, mueve el brazo derecho, donde lleva el bloque elegido.
+- **Multijugador:** cada uno ve el personaje y el color de los demás, también si lo cambian durante la partida.
 - **Cámara:** en primera persona no se ve. Con **V** pasa a tercera persona, desde atrás o de frente, y la cámara se acerca sola si atrás hay una pared.
 
 ## Estructura del código
@@ -282,9 +283,9 @@ src/
     Gamepad.js          → joystick (Gamepad API): botones, palancas con zona muerta y nombres de los botones
     Raycast.js          → bloque apuntado con DDA
     Interaction.js      → romper y poner bloques
-    Avatar.js           → el personaje en el juego: gira con la mirada, lleva el bloque en la pinza
-    coco.js             → Coco: modelo, texturas, animación y expresiones, todo por código
-    colors.js           → los 6 colores del personaje y sus expresiones
+    Avatar.js           → el personaje en el juego: gira con la mirada, lleva el bloque en la mano
+    characters/         → los personajes: humanoid.js (el muñeco, sus animaciones y caras), index.js (la lista) y uno por archivo
+    colors.js           → los 6 colores de la ropa y las expresiones
     RemotePlayer.js     → otro jugador: su personaje, su nombre y movimiento suavizado
     ViewCamera.js       → cámara en primera y tercera persona (tecla V)
   render/
@@ -313,7 +314,7 @@ src/
     Session.js          → conexión WebRTC con PeerJS (anfitrión e invitados)
     Multiplayer.js      → estado de los jugadores y cambios de bloques compartidos
   save/
-    Preferences.js      → preferencias del jugador (color del personaje, nombre y opciones)
+    Preferences.js      → preferencias del jugador (personaje, color de la ropa, nombre y opciones)
     SaveStore.js        → base IndexedDB: registro de cada mundo y sus chunks cambiados
     WorldSaves.js       → mundo actual, autoguardado, cargar, borrar y copias de partidas
 ```

@@ -17,7 +17,7 @@
 // lo acaricia y clic izquierdo lo empuja.
 
 import * as THREE from 'three';
-import { BLOCK, SHAPE, getBlock } from '../world/blocks.js';
+import { BLOCK, DIRS6, SHAPE, getBlock } from '../world/blocks.js';
 import { collisionBoxesAt } from '../world/shapes.js';
 import { CHUNK_HEIGHT } from '../world/Chunk.js';
 import { PAD } from './Gamepad.js';
@@ -207,10 +207,24 @@ export class BlockInteraction {
     if (!this._clear(t.x, t.y, t.z)) return false;
     const partner = doorPartner(this.world, t.x, t.y, t.z, t.id);
     if (partner) this._clear(t.x, partner.y, t.z);
-    // Una planta que estaba arriba se cae con lo que la sostenía.
-    if (getBlock(this.world.getBlock(t.x, t.y + 1, t.z)).soil) this._clear(t.x, t.y + 1, t.z);
+    // Lo que se apoyaba en este bloque se cae con él: una planta arriba, un
+    // cable o una palanca, la cabeza de un pistón.
+    this._dropAttached(t.x, t.y, t.z);
     this.onAction?.('break', t.id);
     return true;
+  }
+
+  /** Rompe lo que estaba sostenido por el bloque (x, y, z), que ya no está. */
+  _dropAttached(x, y, z) {
+    for (const [dx, dy, dz] of DIRS6) {
+      const nx = x + dx;
+      const ny = y + dy;
+      const nz = z + dz;
+      const n = getBlock(this.world.getBlock(nx, ny, nz));
+      const a = n.attach ?? (n.soil ? DOWN : null);
+      // Sostenido por el de (x, y, z): su "attach" apunta para acá.
+      if (a && nx + a[0] === x && ny + a[1] === y && nz + a[2] === z) this._clear(nx, ny, nz);
+    }
   }
 
   /**
@@ -244,6 +258,10 @@ export class BlockInteraction {
     // Las plantas van sobre tierra (y no adentro del agua).
     if (block.soil && (!block.soil.includes(this.world.getBlock(x, y - 1, z)) || getBlock(this.world.getBlock(x, y, z)).liquid)) return false;
     const id = this._variantFor(block, t);
+    if (id === null) return false;
+    // Lo que se apoya en otro bloque (cable, palanca, compuerta) necesita uno entero ahí.
+    const a = getBlock(id).attach;
+    if (a && !holds(getBlock(this.world.getBlock(x + a[0], y + a[1], z + a[2])))) return false;
     if (this._intersectsPlayer(x, y, z, id)) return false;
     if (!this.world.editBlock(x, y, z, id)) return false;
     this.onAction?.('place', id);
@@ -268,6 +286,20 @@ export class BlockInteraction {
    * losa arriba si se apunta a un techo o a la mitad de arriba de una cara.
    */
   _variantFor(block, t) {
+    // Palanca y botón: en el piso o en la pared apuntada (en el techo, no).
+    if (block.places) {
+      const [nx, ny, nz] = t.normal;
+      if (ny === 1) return block.places[0];
+      if (ny === -1) return null;
+      const f = nz === -1 ? 0 : nx === 1 ? 1 : nz === 1 ? 2 : 3;
+      return block.places[1 + f];
+    }
+    // Pistón: empuja hacia donde mira el jugador (también arriba o abajo).
+    if (block.circuit === 'piston') {
+      const pitch = this.player.pitch;
+      return block.variants[pitch > 0.75 ? 4 : pitch < -0.75 ? 5 : this.facing];
+    }
+    if (block.circuit === 'inverter' || block.circuit === 'repeater') return block.variants[this.facing];
     if (block.shape === SHAPE.TRAPDOOR && block.upperVariants && upperHalf(t)) return block.upperVariants[this.facing];
     if (block.shape === SHAPE.STAIRS || block.shape === SHAPE.GATE || block.shape === SHAPE.TRAPDOOR) {
       return block.variants[this.facing];
@@ -339,6 +371,14 @@ export class BlockInteraction {
     const cell = [x, y, z];
     return boxes.some((b) => [0, 1, 2].every((a) => cell[a] + b[a] < hi[a] - EPS && cell[a] + b[a + 3] > lo[a] + EPS));
   }
+}
+
+/** Abajo (lo que sostiene a una planta). */
+const DOWN = [0, -1, 0];
+
+/** ¿El bloque sostiene a otro apoyado (un cubo sólido entero)? */
+function holds(b) {
+  return b.solid && !b.boxes;
 }
 
 /** ¿Va arriba en su celda? Si se apunta a un techo o a la mitad de arriba de una cara. */

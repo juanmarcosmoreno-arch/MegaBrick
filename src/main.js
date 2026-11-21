@@ -34,6 +34,7 @@ import { WorldsMenu } from './ui/WorldsMenu.js';
 import { OptionsMenu, loadOptions } from './ui/OptionsMenu.js';
 import { Footsteps, HEARING_DISTANCE, Sounds } from './audio/Sounds.js';
 import { Animals } from './animals/Animals.js';
+import { Circuits } from './world/Circuits.js';
 
 // Paso de tiempo máximo por frame: si el navegador se traba, el juego no
 // "salta" de golpe.
@@ -163,8 +164,14 @@ class Game {
     document.addEventListener('pointerdown', unlockAudio, true);
     document.addEventListener('keydown', unlockAudio, true);
     // Lo que rompen o ponen los demás jugadores, si está cerca.
-    this._onWorldEdit = (e) => this.playRemoteEdit(e);
+    this._onWorldEdit = (e) => {
+      this.playRemoteEdit(e);
+      this.playMechanism(e);
+    };
     this.world.editListeners.add(this._onWorldEdit);
+    // Circuitos de energía (palancas, cables, pistones...): ver world/Circuits.js.
+    this.circuits = new Circuits();
+    this.circuits.attach(this.world);
 
     // --- Interfaz ---
     this.hud = new Hud(document.getElementById('hud'));
@@ -336,6 +343,7 @@ class Game {
     });
     this.world.importEdits(edits);
     this.world.editListeners.add(this._onWorldEdit);
+    this.circuits.attach(this.world);
     this.scene.add(this.world.group);
     if (time !== undefined) this.sky.setTime(time);
     this.interaction.world = this.world;
@@ -576,6 +584,38 @@ class Game {
       }
     }
     return list;
+  }
+
+  /** Quiénes pisan las placas de presión: los jugadores y los animales. */
+  circuitBodies() {
+    const p = this.player.position;
+    const bodies = [{ x: p.x, y: p.y, z: p.z, halfWidth: this.player.width / 2, height: this.player.height }];
+    if (this.multiplayer.role === 'host') {
+      for (const remote of this.multiplayer.players.values()) {
+        const s = remote.lastState;
+        if (s) bodies.push({ x: s.x, y: s.y, z: s.z, halfWidth: this.player.width / 2, height: this.player.height });
+      }
+    }
+    for (const a of this.animals.list.values()) {
+      bodies.push({ x: a.position.x, y: a.position.y, z: a.position.z, halfWidth: a.halfWidth, height: a.height });
+    }
+    return bodies;
+  }
+
+  /** El timbre suena al prenderse y el pistón al moverse (en todas las computadoras). */
+  playMechanism({ x, y, z, id, prev }) {
+    if (prev === null || prev === id) return;
+    const b = getBlock(id);
+    const before = getBlock(prev);
+    const timbre = b.circuit === 'timbre' && b.on && !before.on;
+    const piston = b.circuit === 'piston' && before.circuit === 'piston' && b.extended !== before.extended;
+    if (!timbre && !piston) return;
+    const p = this.player.position;
+    const d = Math.hypot(x + 0.5 - p.x, y + 0.5 - (p.y + 1.6), z + 0.5 - p.z);
+    if (d > HEARING_DISTANCE) return;
+    const loudness = 1 - d / HEARING_DISTANCE;
+    if (timbre) this.sounds.bell(loudness);
+    else this.sounds.play(b.extended ? 'place' : 'hit', id, loudness);
   }
 
   /** Abre el menú de materiales (tecla E o Vista del joystick). */
@@ -839,6 +879,10 @@ class Game {
     if (this.multiplayer.active) this.sky.advance(realDt);
     else if (this.state === STATE.PLAYING) this.sky.advance(dt);
     this.multiplayer.update(dt);
+    // Los circuitos andan jugando (o siempre, con una partida); en la
+    // partida los calcula el anfitrión y los invitados reciben los cambios.
+    this.circuits.enabled = this.multiplayer.role !== 'guest' && (this.state === STATE.PLAYING || this.multiplayer.active);
+    this.circuits.update(dt, this.circuitBodies());
     // Los animales se mueven jugando (o siempre, con una partida).
     if (this.inGame || this.multiplayer.active) {
       this.animals.update(dt, {

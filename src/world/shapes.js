@@ -19,7 +19,7 @@ export const SIDES = Object.freeze([
   [-1, 0],
 ]);
 
-/** Grupo con el que se une cada ID: 0 ninguno, 1 cercos (y tranqueras), 2 paneles. */
+/** Grupo con el que se une cada ID: 0 ninguno, 1 cercos (y tranqueras), 2 paneles, 3 cables. */
 const GROUP = new Uint8Array(MAX_BLOCK_IDS);
 /**
  * Tranqueras: de qué lados se une (bits de la máscara): solo por sus
@@ -31,6 +31,8 @@ const GATE_SIDES = new Uint8Array(MAX_BLOCK_IDS);
  * follaje): todo cerco o panel se une con ellos.
  */
 const FULL = new Uint8Array(MAX_BLOCK_IDS);
+/** Mecanismos (palancas, lámparas, compuertas...): los cables se unen con ellos. */
+const CIRCUIT = new Uint8Array(MAX_BLOCK_IDS);
 /** Cajas por ID y máscara (solo los que se unen). */
 const SHAPE_BY_MASK = new Array(MAX_BLOCK_IDS).fill(null);
 const COLLISION_BY_MASK = new Array(MAX_BLOCK_IDS).fill(null);
@@ -47,6 +49,13 @@ const PARTS = {
     collisionPost: [6 / 16, 0, 6 / 16, 10 / 16, 1.5, 10 / 16],
     collisionArm: [[6 / 16, 0, 0, 10 / 16, 1.5, 6 / 16]],
   },
+  // Cable: chato sobre el piso; no se choca.
+  wire: {
+    post: [6 / 16, 0, 6 / 16, 10 / 16, 1 / 16, 10 / 16],
+    arm: [[7 / 16, 0, 0, 9 / 16, 1 / 16, 6 / 16]],
+    collisionPost: null,
+    collisionArm: [],
+  },
   pane: {
     post: [7 / 16, 0, 7 / 16, 9 / 16, 1, 9 / 16],
     arm: [[7 / 16, 0, 0, 9 / 16, 1, 7 / 16]],
@@ -56,6 +65,7 @@ const PARTS = {
 };
 
 function build(parts, mask, collision) {
+  if (collision && !parts.collisionPost) return null;
   const boxes = [Object.freeze(collision ? parts.collisionPost : parts.post)];
   for (let side = 0; side < 4; side++) {
     if (!(mask & (1 << side))) continue;
@@ -67,12 +77,13 @@ function build(parts, mask, collision) {
 for (const block of BLOCKS) {
   if (!block) continue;
   FULL[block.id] = block.solid && !block.boxes && !block.connect && !block.liquid ? 1 : 0;
+  CIRCUIT[block.id] = block.circuit && block.circuit !== 'wire' ? 1 : 0;
   if (block.shape === SHAPE.GATE) {
     GROUP[block.id] = 1;
     GATE_SIDES[block.id] = block.facing % 2 === 0 ? 2 | 8 : 1 | 4;
   }
   if (!block.connect) continue;
-  GROUP[block.id] = block.connect === 'fence' ? 1 : 2;
+  GROUP[block.id] = { fence: 1, pane: 2, wire: 3 }[block.connect];
   const parts = PARTS[block.connect];
   SHAPE_BY_MASK[block.id] = [];
   COLLISION_BY_MASK[block.id] = [];
@@ -89,6 +100,8 @@ for (const block of BLOCKS) {
  * norte, 1 este, 2 sur, 3 oeste)? (solo para los que se unen)
  */
 export function joins(id, n, side) {
+  // Un cable, con otros cables y con los mecanismos (no con las paredes).
+  if (GROUP[id] === 3) return GROUP[n] === 3 || CIRCUIT[n] === 1;
   if (FULL[n] === 1) return true;
   if (GROUP[n] === 0 || GROUP[n] !== GROUP[id]) return false;
   // A una tranquera, solo por sus extremos: desde el lado opuesto al nuestro.

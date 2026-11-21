@@ -59,7 +59,22 @@ export const SHAPE = Object.freeze({
   LADDER: 'ladder', // escalera de mano: una tabla contra la pared, se trepa
   TRAPDOOR: 'trapdoor', // trampilla: tapa en el piso que se levanta
   CARPET: 'carpet', // alfombra: una capa finita sobre el piso
+  WIRE: 'wire', // cable: cajitas planas sobre el piso que se unen con los vecinos
+  MECHANISM: 'mechanism', // palanca, botón, placa, compuertas, pistón (cajas fijas)
 });
+
+/**
+ * Las 6 direcciones (norte, este, sur, oeste, arriba, abajo): las 4 de
+ * FACING y después arriba (4) y abajo (5). Para los pistones.
+ */
+export const DIRS6 = Object.freeze([
+  Object.freeze([0, 0, -1]),
+  Object.freeze([1, 0, 0]),
+  Object.freeze([0, 0, 1]),
+  Object.freeze([-1, 0, 0]),
+  Object.freeze([0, 1, 0]),
+  Object.freeze([0, -1, 0]),
+]);
 
 /** Hacia dónde mira algo que gira, como el jugador al ponerlo. */
 export const FACING = Object.freeze({ NORTH: 0, EAST: 1, SOUTH: 2, WEST: 3 });
@@ -76,6 +91,7 @@ export const CATEGORIES = Object.freeze([
   { key: 'roof', name: 'Techos' },
   { key: 'shapes', name: 'Escalones y losas' },
   { key: 'fences', name: 'Cercos, rejas y escaleras' },
+  { key: 'circuits', name: 'Mecanismos' },
   { key: 'details', name: 'Puertas, ventanas y detalles' },
 ]);
 
@@ -110,6 +126,15 @@ export const CATEGORIES = Object.freeze([
  *   de abajo.
  * - icon: 'flat' para dibujar su ícono como la textura plana (plantas, rejas).
  * - leaves: es follaje (los animales no lo pisan).
+ * - faceTiles: una textura por cara, en el orden -X, +X, -Y, +Y, -Z, +Z (un
+ *   pistón tiene frente y espalda). boxTiles: una por caja ({top, side,
+ *   bottom}, un array de 6 o null para usar las del bloque).
+ * - circuit: qué es en un circuito de energía (ver world/Circuits.js):
+ *   'wire', 'lever', 'button', 'plate', 'lamp', 'inverter', 'repeater',
+ *   'timbre', 'piston' o 'head'; `on` si está prendido y `other` el ID del
+ *   mismo bloque en el otro estado.
+ * - attach: [dx, dy, dz] hacia el bloque que lo sostiene (si se rompe ese,
+ *   se rompe este: palancas, botones, cables, placas, compuertas).
  */
 const DEFAULTS = {
   solid: true,
@@ -654,6 +679,250 @@ for (const [key, name] of [
     category: 'carpet',
   });
 }
+
+// ---------------------------------------------------------------------------
+// Mecanismos (etapa 13): cable de cobrizo, palanca, botón, placa de presión,
+// lámpara, inversor, retardador, timbre y pistones. Cómo funcionan: ver
+// world/Circuits.js.
+// ---------------------------------------------------------------------------
+
+/** Abajo: sostenido por el bloque de abajo. */
+const DOWN = Object.freeze([0, -1, 0]);
+
+/** Une dos IDs como el mismo bloque prendido y apagado. */
+function pairOnOff(offId, onId, extra = {}) {
+  BLOCKS[offId] = Object.freeze({ ...BLOCKS[offId], on: false, other: onId, ...extra });
+  BLOCKS[onId] = Object.freeze({ ...BLOCKS[onId], on: true, other: offId, item: offId, category: null, ...extra });
+}
+
+// Cable de cobrizo: plano sobre el piso, se une con los vecinos (shapes.js).
+{
+  const props = {
+    solid: false,
+    opaque: false,
+    sound: 'stone',
+    hardness: 0.05,
+    shape: SHAPE.WIRE,
+    connect: 'wire',
+    circuit: 'wire',
+    attach: DOWN,
+  };
+  const off = add('WIRE', 'Cable de cobrizo', 'wire_off', { ...props, category: 'circuits' });
+  const on = add('WIRE_ON', 'Cable de cobrizo', 'wire_on', { ...props, layer: LAYER.GLOW });
+  pairOnOff(off, on);
+}
+
+/**
+ * Palanca o botón: en el piso o en una pared (la del lado de atrás). 10 IDs:
+ * 5 lugares (piso, y paredes mirando al norte, este, sur y oeste) × apagado
+ * o prendido. `floor` y `wall`: cajas apagado/prendido mirando al norte (en
+ * la pared, contra la del sur).
+ */
+function addSwitch(key, name, circuit, { floor, wall, boxTiles, tiles, ...props }) {
+  const ids = [];
+  for (let place = 0; place < 5; place++) {
+    const onWall = place > 0;
+    const facing = onWall ? place - 1 : 0;
+    for (const on of [false, true]) {
+      const boxes = (onWall ? wall : floor)[on ? 1 : 0].map((b) => rotateBox(b, facing));
+      const [dx, , dz] = DIRS6[facing];
+      ids.push(
+        add(`${key}_${place}_${on ? 'ON' : 'OFF'}`, name, tiles, {
+          solid: false,
+          opaque: false,
+          sound: 'stone',
+          hardness: 0.25,
+          shape: SHAPE.MECHANISM,
+          boxes: Object.freeze(boxes),
+          boxTiles,
+          circuit,
+          onWall,
+          facing,
+          // En la pared, sostenido por el bloque de atrás (al revés de hacia donde mira).
+          attach: onWall ? Object.freeze([-dx, 0, -dz]) : DOWN,
+          ...props,
+        }),
+      );
+    }
+  }
+  const floorIds = Object.freeze([ids[0], ids[2], ids[4], ids[6], ids[8]]); // apagados, por lugar
+  for (let i = 0; i < ids.length; i += 2) {
+    pairOnOff(ids[i], ids[i + 1], { item: ids[0], places: floorIds });
+    // Clic derecho: la palanca cambia; el botón se aprieta (y se suelta solo).
+    const [off, on] = [ids[i], ids[i + 1]];
+    BLOCKS[off] = Object.freeze({ ...BLOCKS[off], toggle: on, category: i === 0 ? 'circuits' : null });
+    BLOCKS[on] = Object.freeze({ ...BLOCKS[on], toggle: circuit === 'lever' ? off : on });
+  }
+  return ids[0];
+}
+
+addSwitch('LEVER', 'Palanca', 'lever', {
+  tiles: { top: 'lever_base', side: 'lever_base', bottom: 'lever_base' },
+  floor: [
+    [[4 / 16, 0, 5 / 16, 12 / 16, 2 / 16, 11 / 16], [7 / 16, 2 / 16, 5 / 16, 9 / 16, 10 / 16, 7 / 16]],
+    [[4 / 16, 0, 5 / 16, 12 / 16, 2 / 16, 11 / 16], [7 / 16, 2 / 16, 9 / 16, 9 / 16, 10 / 16, 11 / 16]],
+  ],
+  wall: [
+    [[5 / 16, 4 / 16, 14 / 16, 11 / 16, 12 / 16, 1], [7 / 16, 4 / 16, 7 / 16, 9 / 16, 6 / 16, 14 / 16]],
+    [[5 / 16, 4 / 16, 14 / 16, 11 / 16, 12 / 16, 1], [7 / 16, 10 / 16, 7 / 16, 9 / 16, 12 / 16, 14 / 16]],
+  ],
+  boxTiles: Object.freeze([null, Object.freeze({ top: 'lever_handle', side: 'lever_handle', bottom: 'lever_handle' })]),
+});
+addSwitch('BUTTON', 'Botón', 'button', {
+  tiles: 'button',
+  floor: [
+    [[5 / 16, 0, 6 / 16, 11 / 16, 2 / 16, 10 / 16]],
+    [[5 / 16, 0, 6 / 16, 11 / 16, 1 / 16, 10 / 16]],
+  ],
+  wall: [
+    [[5 / 16, 6 / 16, 14 / 16, 11 / 16, 10 / 16, 1]],
+    [[5 / 16, 6 / 16, 15 / 16, 11 / 16, 10 / 16, 1]],
+  ],
+});
+// Placa de presión: se pisa (la prende quien esté arriba: jugador o animal).
+{
+  const props = { solid: false, opaque: false, hardness: 0.4, shape: SHAPE.MECHANISM, circuit: 'plate', attach: DOWN };
+  const off = add('PLATE', 'Placa de presión', 'plate', {
+    ...props,
+    boxes: Object.freeze([Object.freeze([1 / 16, 0, 1 / 16, 15 / 16, 1 / 16, 15 / 16])]),
+    category: 'circuits',
+  });
+  const on = add('PLATE_ON', 'Placa de presión', 'plate', {
+    ...props,
+    boxes: Object.freeze([Object.freeze([1 / 16, 0, 1 / 16, 15 / 16, 0.5 / 16, 15 / 16])]),
+  });
+  pairOnOff(off, on);
+}
+// Lámpara: se prende con energía.
+{
+  const off = add('LAMP_OFF', 'Lámpara', 'lamp_off', { sound: 'glass', hardness: 0.35, circuit: 'lamp', category: 'circuits' });
+  const on = add('LAMP_ON', 'Lámpara', 'lamp_on', { sound: 'glass', hardness: 0.35, circuit: 'lamp', layer: LAYER.GLOW });
+  pairOnOff(off, on);
+}
+/**
+ * Compuerta (inversor, retardador): una losa finita con una flecha que
+ * apunta a la salida, adelante (hacia donde miraba quien la puso); la
+ * entrada es atrás. 8 IDs: 4 orientaciones × salida apagada o prendida.
+ */
+function addGate(key, name, circuit, tileKey) {
+  const ids = [];
+  for (let facing = 0; facing < 4; facing++) {
+    for (const on of [false, true]) {
+      const state = on ? 'on' : 'off';
+      ids.push(
+        add(`${key}_${facing}_${on ? 'ON' : 'OFF'}`, name, {
+          top: `${tileKey}_${facing}_${state}`,
+          side: 'gate_side',
+          bottom: 'smooth_stone',
+        }, {
+          opaque: false,
+          hardness: 0.3,
+          shape: SHAPE.MECHANISM,
+          boxes: Object.freeze([Object.freeze([0, 0, 0, 1, 2 / 16, 1])]),
+          circuit,
+          facing,
+          attach: DOWN,
+        }),
+      );
+    }
+  }
+  const variants = Object.freeze(ids.filter((_, i) => i % 2 === 0));
+  for (let i = 0; i < ids.length; i += 2) {
+    pairOnOff(ids[i], ids[i + 1], { item: ids[0], variants });
+    BLOCKS[ids[i]] = Object.freeze({ ...BLOCKS[ids[i]], category: i === 0 ? 'circuits' : null });
+  }
+  return ids[0];
+}
+addGate('INVERTER', 'Inversor', 'inverter', 'inverter');
+addGate('REPEATER', 'Retardador', 'repeater', 'repeater');
+// Timbre: suena cuando le llega energía.
+{
+  const tiles = { top: 'timbre_top', side: 'timbre_side', bottom: 'timbre_side' };
+  const off = add('TIMBRE', 'Timbre', tiles, { sound: 'wood', hardness: 0.5, circuit: 'timbre', category: 'circuits' });
+  const on = add('TIMBRE_ON', 'Timbre', tiles, { sound: 'wood', hardness: 0.5, circuit: 'timbre' });
+  pairOnOff(off, on);
+}
+
+/**
+ * Orienta una caja pensada mirando hacia arriba (el eje del pistón es y:
+ * 0 atrás, 1 adelante) hacia la dirección `dir` de DIRS6.
+ */
+function orientBox([x0, y0, z0, x1, y1, z1], dir) {
+  const map = (x, a, z) => {
+    switch (dir) {
+      case 4: return [x, a, z]; // arriba
+      case 5: return [x, 1 - a, z]; // abajo
+      case 0: return [x, z, 1 - a]; // norte (-Z)
+      case 2: return [x, z, a]; // sur (+Z)
+      case 1: return [a, z, x]; // este (+X)
+      default: return [1 - a, z, x]; // oeste (-X)
+    }
+  };
+  const p = map(x0, y0, z0);
+  const q = map(x1, y1, z1);
+  return Object.freeze([Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.min(p[2], q[2]), Math.max(p[0], q[0]), Math.max(p[1], q[1]), Math.max(p[2], q[2])]);
+}
+
+/** Cara de FACES (orden -X, +X, -Y, +Y, -Z, +Z) que mira hacia cada dirección de DIRS6. */
+const FACE_OF_DIR6 = [4, 1, 5, 0, 3, 2];
+
+/**
+ * Pistón (y pegajoso): 6 direcciones × recogido o estirado, más su cabeza
+ * (la plancha y el vástago que salen al estirarse) en las 6 direcciones.
+ */
+function addPiston(key, name, sticky) {
+  const face = sticky ? 'piston_face_sticky' : 'piston_face';
+  const opposite = (dir) => (dir < 4 ? (dir + 2) % 4 : dir === 4 ? 5 : 4);
+  const bases = [];
+  const heads = [];
+  for (let dir = 0; dir < 6; dir++) {
+    const back = FACE_OF_DIR6[opposite(dir)];
+    const tilesFor = (front) => {
+      const t = new Array(6).fill('piston_side');
+      t[FACE_OF_DIR6[dir]] = front;
+      t[back] = 'piston_back';
+      return Object.freeze(t);
+    };
+    const common = { sound: 'stone', hardness: 0.8, circuit: 'piston', dir, sticky };
+    const retracted = add(`${key}_${dir}`, name, 'piston_side', { ...common, faceTiles: tilesFor(face), extended: false });
+    const rodTiles = Object.freeze({ top: 'piston_rod', side: 'piston_rod', bottom: 'piston_rod' });
+    // Estirado: la base más corta y el primer tramo del vástago (el resto va en la cabeza).
+    const extended = add(`${key}_${dir}_EXTENDED`, name, 'piston_side', {
+      ...common,
+      opaque: false,
+      faceTiles: tilesFor('piston_side'),
+      extended: true,
+      shape: SHAPE.MECHANISM,
+      boxes: Object.freeze([orientBox([0, 0, 0, 1, 12 / 16, 1], dir), orientBox([6 / 16, 12 / 16, 6 / 16, 10 / 16, 1, 10 / 16], dir)]),
+      boxTiles: Object.freeze([null, rodTiles]),
+    });
+    bases.push([retracted, extended]);
+    const head = add(`${key}_HEAD_${dir}`, name, 'piston_side', {
+      opaque: false,
+      sound: 'stone',
+      hardness: 0.8,
+      circuit: 'head',
+      dir,
+      sticky,
+      shape: SHAPE.MECHANISM,
+      boxes: Object.freeze([orientBox([0, 12 / 16, 0, 1, 1, 1], dir), orientBox([6 / 16, 0, 6 / 16, 10 / 16, 12 / 16, 10 / 16], dir)]),
+      boxTiles: Object.freeze([tilesFor(face), rodTiles]),
+      // Sostenida por la base (atrás).
+      attach: Object.freeze(DIRS6[opposite(dir)].slice()),
+    });
+    heads.push(head);
+  }
+  const item = bases[4][0]; // en el menú: mirando para arriba
+  const variants = Object.freeze(bases.map(([r]) => r));
+  bases.forEach(([r, e], dir) => {
+    BLOCKS[r] = Object.freeze({ ...BLOCKS[r], item, variants, other: e, head: heads[dir], category: dir === 4 ? 'circuits' : null });
+    BLOCKS[e] = Object.freeze({ ...BLOCKS[e], item, variants, other: r, head: heads[dir] });
+    BLOCKS[heads[dir]] = Object.freeze({ ...BLOCKS[heads[dir]], item, base: e });
+  });
+  return item;
+}
+addPiston('PISTON', 'Pistón', false);
+addPiston('PISTON_STICKY', 'Pistón pegajoso', true);
 
 Object.freeze(BLOCK);
 

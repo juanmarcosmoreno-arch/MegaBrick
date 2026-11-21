@@ -32,6 +32,7 @@ El juego se construye por etapas. Siempre queda una versión jugable.
 | 10 | Animales: carpincho, oveja, gallina y conejo (acariciarlos, empujarlos, te siguen), también en el multijugador | ✅ |
 | 11 | Resistencia de los materiales: romper tarda distinto según el bloque, con grietas | ✅ |
 | 12 | Más bloques: naturaleza, pino y jacarandá, plantas y flores, hormigón, baldosa calcárea, metales, chapa, vidrios de colores, alfombras, cercos, rejas, paneles de vidrio, tranqueras, escaleras de mano y trampillas | ✅ |
+| 13 | Mecanismos: cable de cobrizo, palanca, botón, placa de presión, lámpara, inversor, retardador, timbre y pistones; puertas, trampillas y tranqueras que se abren con energía | ✅ |
 
 ## Requisitos
 
@@ -131,7 +132,7 @@ Algunas cosas siguen pidiendo el teclado o el mouse: escribir (nombre de un mund
   | 1 – 1,2 s | Piedra, empedrado, ladrillos, piedra lisa, ladrillo de piedra |
   | 1,3 – 1,8 s | Mármol y los minerales (cobrizo, azurita y, la más dura, solarita) |
 - **Hotbar:** tiene 9 casillas abajo de la pantalla. Un mundo nuevo empieza con césped, tierra, piedra, tablones, ladrillo de piedra, vidrio, tronco, follaje y arena. El bloque elegido se ve en la mano, en primera persona y también en el personaje en tercera persona.
-- **Menú de materiales (E):** muestra todos los bloques para construir, en 11 grupos: naturaleza, plantas y flores, madera, piedra y ladrillo, metal y vidrio, revoque de colores, alfombras, techos, escalones y losas, cercos, rejas y escaleras, y puertas, ventanas y detalles. Si la ventana es chica, el borde de abajo se esfuma: hay más bajando. Arriba están las 9 casillas: elegís una y después el material que va en ella (también con las teclas 1 – 9). Lo que ponés en la hotbar se guarda con el mundo.
+- **Menú de materiales (E):** muestra todos los bloques para construir, en 12 grupos: naturaleza, plantas y flores, madera, piedra y ladrillo, metal y vidrio, revoque de colores, alfombras, techos, escalones y losas, cercos, rejas y escaleras, mecanismos, y puertas, ventanas y detalles. Si la ventana es chica, el borde de abajo se esfuma: hay más bajando. Arriba están las 9 casillas: elegís una y después el material que va en ella (también con las teclas 1 – 9). Lo que ponés en la hotbar se guarda con el mundo.
 - **Escalones:** se ponen mirando hacia donde mirás, con la parte alta del lado de enfrente, así que para hacer una escalera o un techo a dos aguas alcanza con mirar hacia donde sube. Se suben caminando, sin saltar.
 - **Losas:** medio bloque. Van abajo, salvo que apuntes a un techo o a la mitad de arriba de una pared: ahí van arriba. Una losa también se sube caminando (un bloque entero sigue pidiendo saltar).
 - **Puertas:** ocupan dos bloques de alto y se ponen mirando hacia donde mirás, con la bisagra a tu izquierda. Clic derecho (o el gatillo izquierdo del joystick) las abre y las cierra; rotas, se va la puerta entera. Abiertas dejan pasar; cerradas, no.
@@ -146,6 +147,18 @@ Algunas cosas siguen pidiendo el teclado o el mouse: escribir (nombre de un mund
 - **Agua:** si rompés un bloque con agua arriba o a un costado, el hueco se llena de agua. Por ahora el agua no fluye.
 - **Tus cambios se recuerdan:** se guardan como diferencias respecto del terreno generado. Si te alejás y el chunk se descarga, al volver tu construcción sigue ahí. Ese registro es lo que se guarda en el navegador y lo que se comparte en el multijugador.
 - **Mira:** en primera persona y en tercera desde atrás marca el bloque apuntado. En la vista de frente se oculta.
+
+## Mecanismos
+
+Con energía se arman puertas que se abren solas, luces, timbres, relojes y máquinas con pistones. La energía está prendida o apagada (no tiene niveles) y avanza de a pasos, 10 por segundo. Todo está en el grupo **Mecanismos** del menú (E).
+
+- **Fuentes:** la **palanca** (clic derecho la prende o la apaga; va en el piso o en una pared), el **botón** (clic derecho lo aprieta y da energía un segundo; piso o pared), la **placa de presión** (da energía mientras alguien la pisa: el jugador o un animal) y el **bloque de solarita**, que da energía siempre.
+- **Cable de cobrizo:** se pone sobre el piso y se une solo con los cables y mecanismos de al lado. Un tramo de cables unidos se prende entero, al instante, si alguno toca una fuente; prendido, brilla.
+- **Lo que se enciende:** la **lámpara** se prende, el **timbre** suena al llegarle la energía, y las **puertas, trampillas y tranqueras** se abren cuando llega y se cierran cuando se va (mientras tanto se siguen usando a mano). Les llega la energía por cualquiera de sus lados.
+- **Compuertas:** son losas finitas con una flecha que apunta hacia adelante (hacia donde mirabas al ponerlas): la entrada es atrás y la salida adelante, y solo dan energía hacia adelante. El **inversor** da energía cuando no le llega (un paso después: un inversor que se alimenta a sí mismo por un lazo de cable titila, y es un reloj) y el **retardador** la pasa igual pero 0,3 s después (sirve también para que la energía vaya en un solo sentido).
+- **Pistón:** empuja hasta 12 bloques hacia donde mirabas al ponerlo (también para arriba o para abajo) cuando le llega energía, y se recoge cuando se va. El **pistón pegajoso** además trae de vuelta el bloque que tenía adelante. No mueve el lecho primordial, las puertas ni otros pistones estirados; lo que es frágil (plantas, cables, palancas) se rompe si lo empuja encima.
+- **Lo que se apoya:** cables, placas, compuertas, palancas y botones necesitan un bloque entero donde apoyarse; si se rompe ese bloque, se caen con él.
+- **Multijugador:** los circuitos los calcula el anfitrión y los cambios les llegan a todos como cualquier bloque; el invitado los usa igual (palancas, botones, placas).
 
 ## Guardado
 
@@ -249,7 +262,8 @@ src/
   style.css             → estilos del HUD y los menús
   world/
     blocks.js           → tipos de bloque, sus propiedades y formas (losas, escalones, puertas, plantas, cercos...)
-    shapes.js           → formas que dependen de los vecinos: cercos, rejas y paneles que se unen
+    shapes.js           → formas que dependen de los vecinos: cercos, rejas, paneles y cables que se unen
+    Circuits.js         → circuitos de energía: cables, fuentes, compuertas, lámparas, puertas y pistones
     Chunk.js            → datos de un chunk de 16×128×16 (Uint16Array, 0 = aire)
     World.js            → chunks alrededor del jugador (carga/descarga, cola de prioridad), get/set de bloques, mallas
     ChunkWorkers.js     → grupo de Web Workers: reparte los trabajos y avisa cuando terminan
@@ -350,6 +364,12 @@ src/
 | 224 – 227 | Escalera de mano | Una por orientación |
 | 228 – 243 | Trampilla | 16 IDs: 4 orientaciones, cerrada o abierta, abajo o arriba en su celda |
 | 244 – 255 | Alfombras de los 12 colores del revoque | |
+| 256 – 257 | Cable de cobrizo (apagado y prendido) | Plano, se une con los vecinos |
+| 258 – 277 | Palanca y botón | 10 IDs cada uno: piso o 4 paredes, apagado o prendido |
+| 278 – 281 | Placa de presión y lámpara (apagadas y prendidas) | |
+| 282 – 297 | Inversor y retardador | 8 IDs cada uno: 4 orientaciones, salida apagada o prendida |
+| 298 – 299 | Timbre | |
+| 300 – 335 | Pistón y pistón pegajoso | 18 IDs cada uno: 6 direcciones, recogido o estirado, y la cabeza |
 
 Cada escalón usa 4 IDs (uno por orientación) y cada losa 2 (abajo y arriba): en la hotbar y en el menú se ve uno solo, y al ponerlo se elige el que corresponde. Los IDs se guardan en los mundos, así que los bloques nuevos se agregan siempre al final. Los chunks guardan IDs de 16 bits: hay lugar para 1024 tipos de bloque.
 

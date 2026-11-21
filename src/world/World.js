@@ -111,6 +111,8 @@ export class World {
      * (prev: el bloque que había, o null si el chunk no estaba cargado).
      */
     this.editListeners = new Set();
+    /** Chunks a rearmar al terminar una tanda de cambios (ver batch), o null. */
+    this._batch = null;
     this.setRenderDistance(renderDistance);
   }
 
@@ -262,15 +264,42 @@ export class World {
     chunkEdits.set(Chunk.index(toLocalCoord(x), y, toLocalCoord(z)), id);
     this.unsaved.add(key);
 
-    // Rearmar ya mismo lo afectado (el chunk y sus vecinos marcados).
+    // Rearmar ya mismo lo afectado (el chunk y sus vecinos marcados); en
+    // una tanda (ver batch), al final y una vez por chunk.
     if (loaded) {
       for (const [dx, dz] of NEIGHBORHOOD) {
         const chunk = this.getChunk(cx + dx, cz + dz);
-        if (chunk?.dirty && chunk.mesh && this._neighborsReady(chunk.cx, chunk.cz)) this.rebuildChunk(chunk);
+        if (!chunk?.dirty || !chunk.mesh) continue;
+        if (this._batch) this._batch.add(chunk);
+        else if (this._neighborsReady(chunk.cx, chunk.cz)) this.rebuildChunk(chunk);
       }
     }
     for (const listener of this.editListeners) listener({ x, y, z, id, prev, source });
     return true;
+  }
+
+  /**
+   * Hace varios cambios juntos (un circuito, un pistón): cada chunk tocado
+   * se rearma una sola vez, al final, en vez de una vez por bloque.
+   * @param {() => void} fn
+   */
+  batch(fn) {
+    if (this._batch) {
+      fn();
+      return;
+    }
+    this._batch = new Set();
+    try {
+      fn();
+    } finally {
+      const chunks = this._batch;
+      this._batch = null;
+      for (const chunk of chunks) {
+        if (chunk.dirty && chunk.mesh && this.chunks.get(chunkKey(chunk.cx, chunk.cz)) === chunk && this._neighborsReady(chunk.cx, chunk.cz)) {
+          this.rebuildChunk(chunk);
+        }
+      }
+    }
   }
 
   /**

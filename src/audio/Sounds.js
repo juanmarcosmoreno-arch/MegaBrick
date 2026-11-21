@@ -129,6 +129,29 @@ export class Sounds {
     }
   }
 
+  /** El timbre: dos notas de campanita que se apagan despacio. */
+  bell(loudness = 1) {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || this.volume <= 0 || loudness <= 0) return;
+    const t = ctx.currentTime;
+    for (const [freq, gain, decay] of [
+      [1046.5, 0.32, 1.4],
+      [1568, 0.18, 0.9],
+      [2093, 0.08, 0.5],
+    ]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain * loudness, t + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+      osc.connect(g).connect(this.master);
+      osc.start(t);
+      osc.stop(t + decay + 0.05);
+    }
+  }
+
   /**
    * La voz de un animal.
    * @param {string} species id de la especie

@@ -117,6 +117,8 @@ const LIQUID = new Uint8Array(MAX_ID);
 const NO_SHADE = new Uint8Array(MAX_ID);
 /** UV de cada cara de cada bloque: [id * 24 + cara * 4 + (u0, v0, u1, v1)]. */
 const FACE_UVS = new Float32Array(MAX_ID * 24);
+/** UV por caja de los bloques con boxTiles: [id][caja] → Float32Array(24) como FACE_UVS. */
+const BOX_UVS = new Array(MAX_ID).fill(null);
 /** Cajas de los bloques con forma (null para los cubos). */
 const SHAPE_BOXES = new Array(MAX_ID).fill(null);
 /** Cercos y paneles: sus cajas para cada máscara de vecinos (ver shapes.js). */
@@ -139,7 +141,21 @@ for (const block of BLOCKS) {
   }
   PLANT[block.id] = block.shape === SHAPE.PLANT ? 1 : 0;
   if (!block.tiles) continue;
-  FACES.forEach((face, f) => FACE_UVS.set(tileUV(block.tiles[face.tile]), block.id * 24 + f * 4));
+  // Una textura por cara (faceTiles, en el orden de FACES: un pistón tiene
+  // frente y espalda) o arriba/costado/abajo.
+  FACES.forEach((face, f) => FACE_UVS.set(tileUV(block.faceTiles?.[f] ?? block.tiles[face.tile]), block.id * 24 + f * 4));
+  // Cajas con su propia textura (boxTiles: la palanca y su base, el pistón y su vástago).
+  if (block.boxTiles) {
+    BOX_UVS[block.id] = block.boxTiles.map((tiles) => {
+      const uvs = new Float32Array(24);
+      if (!tiles) {
+        uvs.set(FACE_UVS.subarray(block.id * 24, block.id * 24 + 24));
+        return uvs;
+      }
+      FACES.forEach((face, f) => uvs.set(tileUV(Array.isArray(tiles) ? tiles[f] : tiles[face.tile]), f * 4));
+      return uvs;
+    });
+  }
 }
 
 /**
@@ -301,7 +317,7 @@ const corner = (box, axis, bit) => box[bit ? axis + 3 : axis];
  * z1] dentro del bloque. La oclusión se calcula solo si la cara está en el
  * borde del bloque (las de adentro de una losa o un escalón van sin sombra).
  */
-function emitFace(buf, pad, f, id, x, y, z, pi, box) {
+function emitFace(buf, pad, f, id, x, y, z, pi, box, uvTable = FACE_UVS, uvStart = id * 24) {
   buf.reserveQuad();
   const P = buf.positions;
   const N = buf.normals;
@@ -312,11 +328,11 @@ function emitFace(buf, pad, f, id, x, y, z, pi, box) {
   const onEdge = f & 1 ? box[axis + 3] === 1 : box[axis] === 0;
   const shade = !NO_SHADE[id] && onEdge;
   const aoBase = f * 12;
-  const uvBase = id * 24 + f * 4;
-  const u0 = FACE_UVS[uvBase];
-  const v0 = FACE_UVS[uvBase + 1];
-  const du = FACE_UVS[uvBase + 2] - u0;
-  const dv = FACE_UVS[uvBase + 3] - v0;
+  const uvBase = uvStart + f * 4;
+  const u0 = uvTable[uvBase];
+  const v0 = uvTable[uvBase + 1];
+  const du = uvTable[uvBase + 2] - u0;
+  const dv = uvTable[uvBase + 3] - v0;
   const nx = NORMALS[f * 3];
   const ny = NORMALS[f * 3 + 1];
   const nz = NORMALS[f * 3 + 2];
@@ -499,12 +515,15 @@ export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
         } else if (boxes) {
           // Con forma: cada caja entera, salvo las caras pegadas a un bloque
           // opaco del costado.
-          for (const box of boxes) {
+          const boxUvs = BOX_UVS[id];
+          for (let b = 0; b < boxes.length; b++) {
+            const box = boxes[b];
             for (let f = 0; f < 6; f++) {
               const axis = f >> 1;
               const onEdge = f & 1 ? box[axis + 3] === 1 : box[axis] === 0;
               if (onEdge && OPAQUE[neighbor[f]]) continue;
-              emitFace(buf, pad, f, id, x, y, z, pi, box);
+              if (boxUvs) emitFace(buf, pad, f, id, x, y, z, pi, box, boxUvs[b], 0);
+              else emitFace(buf, pad, f, id, x, y, z, pi, box);
             }
           }
         } else {

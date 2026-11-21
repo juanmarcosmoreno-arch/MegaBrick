@@ -15,6 +15,7 @@ import {
 import naturaleza from './tiles/naturaleza.js';
 import arboles from './tiles/arboles.js';
 import construccion from './tiles/construccion.js';
+import mecanismos from './tiles/mecanismos.js';
 
 const S = TILE_SIZE;
 
@@ -166,6 +167,27 @@ const lift = ([r, g, b], k) => [r + k, g + k, b + k];
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 const TRANSPARENT = [0, 0, 0, 0];
+
+/**
+ * Gira lo ya pintado en la textura `quarters` cuartos de vuelta en el
+ * sentido de las agujas del reloj (para pintar algo una vez y usarlo
+ * mirando hacia los 4 lados).
+ */
+function rotateTile(p, quarters) {
+  const q = ((quarters % 4) + 4) % 4;
+  if (!q) return;
+  const src = [];
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) src.push(p.get(x, y));
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      // Píxel de origen del (x, y) de destino.
+      let sx = x;
+      let sy = y;
+      for (let i = 0; i < q; i++) [sx, sy] = [sy, S - 1 - sx];
+      p.set(x, y, src[sy * S + sx]);
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Pintores de cada textura
@@ -1131,9 +1153,10 @@ const TOOLS = Object.freeze({
   paintPlaster,
   paintPane,
   paintHandle,
+  rotateTile,
   PAINTERS,
 });
-for (const group of [naturaleza, arboles, construccion]) Object.assign(PAINTERS, group(TOOLS));
+for (const group of [naturaleza, arboles, construccion, mecanismos]) Object.assign(PAINTERS, group(TOOLS));
 
 // ---------------------------------------------------------------------------
 // Atlas

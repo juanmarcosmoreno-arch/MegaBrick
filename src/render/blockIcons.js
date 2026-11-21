@@ -98,15 +98,20 @@ export function getBlockIcon(atlas, id) {
   } else if (block.boxes || isConnected(id)) {
     // Un cerco, como un tramo unido al este y al oeste.
     const own = isConnected(id) ? connectedBoxes(id, 2 | 8) : block.boxes;
+    // Cada caja con su textura (boxTiles: el palo de la palanca).
+    const asTiles = (t) => (Array.isArray(t) ? { top: t[3], side: t[5], bottom: t[2] } : t);
+    const tilesOf = new Map(own.map((box, i) => [box, asTiles(block.boxTiles?.[i] ?? block.tiles)]));
     // De abajo hacia arriba y de atrás hacia adelante.
     const boxes = [...own].sort((a, b) => a[1] - b[1] || a[0] + a[2] - (b[0] + b[2]));
-    for (const box of boxes) drawBox(ctx, atlas, block.tiles, box);
+    for (const box of boxes) drawBox(ctx, atlas, tilesOf.get(box), box);
   } else if (block.tiles) {
     const h = SIZE / 4; // alto del rombo de arriba hasta su centro
     // Arriba: rombo. Izquierda y derecha: paralelogramos hacia abajo.
-    drawFace(ctx, atlas, block.tiles.top, [K, K / 2, -K, K / 2, SIZE / 2, 2], 0);
-    drawFace(ctx, atlas, block.tiles.side, [K, K / 2, 0, K, 0, 2 + h], 0.22);
-    drawFace(ctx, atlas, block.tiles.side, [K, -K / 2, 0, K, SIZE / 2, 2 + 2 * h], 0.4);
+    // Con una textura por cara (el pistón), las de arriba, +Z y +X.
+    const f = block.faceTiles;
+    drawFace(ctx, atlas, f?.[3] ?? block.tiles.top, [K, K / 2, -K, K / 2, SIZE / 2, 2], 0);
+    drawFace(ctx, atlas, f?.[5] ?? block.tiles.side, [K, K / 2, 0, K, 0, 2 + h], 0.22);
+    drawFace(ctx, atlas, f?.[1] ?? block.tiles.side, [K, -K / 2, 0, K, SIZE / 2, 2 + 2 * h], 0.4);
   }
   url = canvas.toDataURL();
   cache.set(id, url);

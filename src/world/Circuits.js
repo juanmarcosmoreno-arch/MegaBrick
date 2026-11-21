@@ -21,6 +21,7 @@
 
 import { BLOCK, DIRS6, SHAPE, getBlock } from './blocks.js';
 import { CHUNK_HEIGHT } from './Chunk.js';
+import { supportedBy } from './shapes.js';
 
 /** Segundos por paso. */
 const TICK = 0.1;
@@ -29,7 +30,7 @@ const INVERTER_TICKS = 1;
 const REPEATER_TICKS = 3;
 const BUTTON_TICKS = 10;
 /** Topes: cables en un tramo y bloques que empuja un pistón. */
-const MAX_WIRES = 1024;
+const MAX_WIRES = 4096;
 const MAX_PUSH = 12;
 /** Pasos que se ponen al día por frame (si el juego se trabó, no se acumulan). */
 const MAX_TICKS_PER_FRAME = 4;
@@ -66,12 +67,18 @@ function movable(b) {
   return true;
 }
 
-/** ¿Lo que hay en una celda se rompe si algo se mete ahí (planta, cable, palanca...)? */
-const fragile = (b) => b.shape === SHAPE.PLANT || Boolean(b.attach) || b.shape === SHAPE.CARPET;
+/**
+ * ¿Lo que hay en una celda se rompe si algo se mete ahí (planta, cable,
+ * palanca...)? La cabeza de otro pistón no: frena.
+ */
+const fragile = (b) => b.circuit !== 'head' && (b.shape === SHAPE.PLANT || Boolean(b.attach) || b.shape === SHAPE.CARPET);
 
 export class Circuits {
   constructor() {
     this.world = null;
+    /** false en un invitado (los calcula el anfitrión): no se junta nada. */
+    this.active = true;
+    /** false en pausa: no avanza, pero lo pendiente queda para después. */
     this.enabled = true;
     this._time = 0;
     this._tick = 0;
@@ -83,29 +90,49 @@ export class Circuits {
     this._plates = new Map();
     /** Si una puerta, trampilla o tranquera tenía energía la última vez que se miró. */
     this._wasPowered = new Map();
+    /** Cambios calculados en un paso (clave → [x, y, z, id]) y pistones a mover: se aplican al final. */
+    this._changes = new Map();
+    this._moves = [];
     this._listener = (e) => this._onEdit(e);
+    this._chunkListener = (cx, cz) => this._chunkLoaded(cx, cz);
   }
 
-  /** Empieza a mirar un mundo (al cargarlo): revisa todo lo que es de un circuito. */
+  /**
+   * Empieza a mirar un mundo (al cargarlo, o al quedarse con el mundo de una
+   * partida): revisa lo que es de un circuito en cada chunk que se carga.
+   */
   attach(world) {
     this.world?.editListeners.delete(this._listener);
+    this.world?.chunkListeners.delete(this._chunkListener);
     this.world = world;
     this._dirty.clear();
     this._timers.clear();
     this._plates.clear();
     this._wasPowered.clear();
     world.editListeners.add(this._listener);
-    // Los mecanismos solo existen como cambios del jugador: con eso alcanza.
-    for (const [chunkKey, edits] of world.edits) {
-      const [cx, cz] = chunkKey.split(',').map(Number);
-      for (const [index, id] of edits) {
-        const b = getBlock(id);
-        if (!b.circuit && id !== BLOCK.SOLARITE_BLOCK) continue;
-        const x = cx * 16 + (index & 15);
-        const z = cz * 16 + ((index >> 4) & 15);
-        const y = index >> 8;
-        this._mark(x, y, z);
-        if (b.circuit === 'plate') this._plates.set(key(x, y, z), [x, y, z]);
+    world.chunkListeners.add(this._chunkListener);
+    for (const chunk of world.chunks.values()) this._chunkLoaded(chunk.cx, chunk.cz);
+  }
+
+  /**
+   * Se cargó un chunk: sus mecanismos (que solo existen como cambios de los
+   * jugadores) se revisan, sus placas se registran y un botón que quedó
+   * apretado se suelta.
+   */
+  _chunkLoaded(cx, cz) {
+    const edits = this.world.edits.get(`${cx},${cz}`);
+    if (!edits) return;
+    for (const [index, id] of edits) {
+      const b = getBlock(id);
+      if (!b.circuit && id !== BLOCK.SOLARITE_BLOCK) continue;
+      const x = cx * 16 + (index & 15);
+      const z = cz * 16 + ((index >> 4) & 15);
+      const y = index >> 8;
+      const k = key(x, y, z);
+      this._mark(x, y, z);
+      if (b.circuit === 'plate') this._plates.set(k, [x, y, z]);
+      if (b.circuit === 'button' && b.on && !this._timers.has(k)) {
+        this._timers.set(k, { tick: this._tick + BUTTON_TICKS, x, y, z, from: id, to: b.other });
       }
     }
   }
@@ -140,11 +167,13 @@ export class Circuits {
    */
   update(dt, bodies) {
     if (!this.world) return;
-    if (!this.enabled) {
-      // En pausa o como invitado: nada se acumula (al volver se revisa lo que cambie).
+    if (!this.active) {
+      // Invitado: no se junta nada (lo calcula el anfitrión).
       this._dirty.clear();
+      this._timers.clear();
       return;
     }
+    if (!this.enabled) return; // en pausa: lo pendiente espera
     this._time += Math.min(dt, TICK * MAX_TICKS_PER_FRAME);
     let ticks = 0;
     while (this._time >= TICK && ticks < MAX_TICKS_PER_FRAME) {
@@ -159,20 +188,29 @@ export class Circuits {
     const world = this.world;
     world.batch(() => {
       this._checkPlates(bodies);
-      // Cambios programados que llegaron (si el bloque sigue como estaba).
+      // Cambios programados que llegaron (si el bloque sigue como estaba; si
+      // su chunk no está cargado, esperan).
       for (const [k, t] of this._timers) {
-        if (t.tick > this._tick) continue;
+        if (t.tick > this._tick || !world.isLoadedAt(t.x, t.z)) continue;
         this._timers.delete(k);
         if (world.getBlock(t.x, t.y, t.z) === t.from) world.editBlock(t.x, t.y, t.z, t.to);
       }
       // Lo que cambió en el paso anterior (lo de este paso, en el próximo).
+      // Todo se calcula con el mundo como está y se aplica al final: así el
+      // resultado no depende del orden (ni de qué haya al lado).
       const cells = [...this._dirty.values()];
       this._dirty.clear();
       const seenWires = new Set();
       for (const [x, y, z] of cells) {
+        // Sin cargar: se revisa cuando se cargue el chunk (ver _chunkLoaded).
         if (!world.isLoadedAt(x, z)) continue;
         this._evaluate(x, y, z, seenWires);
       }
+      for (const [x, y, z, id] of this._changes.values()) world.editBlock(x, y, z, id);
+      this._changes.clear();
+      const moves = this._moves;
+      this._moves = [];
+      for (const move of moves) move();
     });
   }
 
@@ -180,6 +218,7 @@ export class Circuits {
   _checkPlates(bodies) {
     const world = this.world;
     for (const [k, [x, y, z]] of this._plates) {
+      if (!world.isLoadedAt(x, z)) continue; // sigue registrada para cuando vuelva
       const id = world.getBlock(x, y, z);
       const b = getBlock(id);
       if (b.circuit !== 'plate') {
@@ -214,6 +253,11 @@ export class Circuits {
     return emitsTo(getBlock(this.world.getBlock(x - fx, y, z - fz)), fx, 0, fz);
   }
 
+  /** Un cambio calculado en este paso (se aplica al final). */
+  _set(x, y, z, id) {
+    this._changes.set(key(x, y, z), [x, y, z, id]);
+  }
+
   _evaluate(x, y, z, seenWires) {
     const world = this.world;
     const id = world.getBlock(x, y, z);
@@ -225,7 +269,7 @@ export class Circuits {
       case 'lamp':
       case 'timbre': {
         const want = this._powered(x, y, z);
-        if (want !== b.on) world.editBlock(x, y, z, b.other);
+        if (want !== b.on) this._set(x, y, z, b.other);
         return;
       }
       case 'inverter':
@@ -244,19 +288,23 @@ export class Circuits {
       }
       case 'piston': {
         const want = this._powered(x, y, z);
-        if (want && !b.extended) this._extend(x, y, z, b);
-        else if (!want && b.extended) this._retract(x, y, z, b);
+        // Se mueven al final del paso (si el pistón sigue igual).
+        const later = (fn) => this._moves.push(() => {
+          if (world.getBlock(x, y, z) === id) fn.call(this, x, y, z, b);
+        });
+        if (want && !b.extended) later(this._extend);
+        else if (!want && b.extended) later(this._retract);
         else if (b.extended) {
           // Si le sacaron la cabeza, queda recogido.
           const [dx, dy, dz] = DIRS6[b.dir];
-          if (world.getBlock(x + dx, y + dy, z + dz) !== b.head) world.editBlock(x, y, z, b.other);
+          if (world.getBlock(x + dx, y + dy, z + dz) !== b.head) this._set(x, y, z, b.other);
         }
         return;
       }
       case 'head': {
         // Una cabeza sin su pistón estirado atrás se va.
         const [dx, dy, dz] = DIRS6[b.dir];
-        if (world.getBlock(x - dx, y - dy, z - dz) !== b.base) world.editBlock(x, y, z, BLOCK.AIR);
+        if (world.getBlock(x - dx, y - dy, z - dz) !== b.base) this._set(x, y, z, BLOCK.AIR);
         return;
       }
       default:
@@ -295,7 +343,7 @@ export class Circuits {
     }
     for (const [x, y, z] of wires) {
       const b = getBlock(world.getBlock(x, y, z));
-      if (b.on !== powered) world.editBlock(x, y, z, b.other);
+      if (b.on !== powered) this._set(x, y, z, b.other);
     }
   }
 
@@ -321,10 +369,10 @@ export class Circuits {
     if (b.open === powered) return;
     if (b.shape === SHAPE.DOOR) {
       const idFor = (upper) => b.doorIds[`${b.facing}${powered ? 1 : 0}${upper ? 1 : 0}`];
-      world.editBlock(x, y, z, idFor(b.upper));
-      if (partner) world.editBlock(x, partner.y, z, idFor(!b.upper));
+      this._set(x, y, z, idFor(b.upper));
+      if (partner) this._set(x, partner.y, z, idFor(!b.upper));
     } else {
-      world.editBlock(x, y, z, b.toggle);
+      this._set(x, y, z, b.toggle);
     }
   }
 
@@ -342,6 +390,14 @@ export class Circuits {
       if (n.id === BLOCK.AIR || n.liquid || fragile(n)) break; // ahí entra lo empujado
       if (!movable(n) || line.length >= MAX_PUSH) return; // trabado o demasiado
       line.push(n.id);
+    }
+    // Lo que estaba apoyado en los bloques que se mueven (un cable arriba,
+    // una palanca en la pared) se cae, salvo lo que también se mueve.
+    const moving = new Set(line.map((_, i) => key(x + dx * (i + 1), y + dy * (i + 1), z + dz * (i + 1))));
+    for (let i = 1; i <= line.length; i++) {
+      for (const [ax, ay, az] of supportedBy(world, x + dx * i, y + dy * i, z + dz * i)) {
+        if (!moving.has(key(ax, ay, az)) && !(ax === x && ay === y && az === z)) world.editBlock(ax, ay, az, BLOCK.AIR);
+      }
     }
     // De adelante para atrás, cada uno un lugar más allá.
     for (let i = line.length; i >= 1; i--) {

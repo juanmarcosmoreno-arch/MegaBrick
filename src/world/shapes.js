@@ -132,6 +132,28 @@ function maskAt(world, x, y, z, id) {
   return mask;
 }
 
+/** Abajo: lo que sostiene a una planta (las plantas no tienen `attach`). */
+const DOWN = Object.freeze([0, -1, 0]);
+
+/**
+ * Las celdas vecinas de (x, y, z) con algo apoyado en ese bloque (una
+ * planta arriba, un cable, una palanca en la pared, la cabeza de un
+ * pistón): si ese bloque se va, se caen.
+ * @returns {[number, number, number][]}
+ */
+export function supportedBy(world, x, y, z) {
+  const out = [];
+  for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+    const nx = x + dx;
+    const ny = y + dy;
+    const nz = z + dz;
+    const n = getBlock(world.getBlock(nx, ny, nz));
+    const a = n.attach ?? (n.soil ? DOWN : null);
+    if (a && nx + a[0] === x && ny + a[1] === y && nz + a[2] === z) out.push([nx, ny, nz]);
+  }
+  return out;
+}
+
 /**
  * Cajas que se ven y se apuntan del bloque `id` en (x, y, z), o null si es
  * un cubo entero.

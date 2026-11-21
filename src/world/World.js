@@ -111,6 +111,8 @@ export class World {
      * (prev: el bloque que había, o null si el chunk no estaba cargado).
      */
     this.editListeners = new Set();
+    /** Funciones que se llaman con (cx, cz) cada vez que se carga un chunk (con sus cambios). */
+    this.chunkListeners = new Set();
     /** Chunks a rearmar al terminar una tanda de cambios (ver batch), o null. */
     this._batch = null;
     this.setRenderDistance(renderDistance);
@@ -407,6 +409,7 @@ export class World {
     }
     const chunk = new Chunk(cx, cz, data, maxY);
     this.chunks.set(chunkKey(cx, cz), chunk);
+    for (const listener of this.chunkListeners) listener(cx, cz);
     // Una malla de un vecino que esté en camino se armó sin este chunk (o con
     // una copia vieja): que se rehaga. Jugando normal no cuesta nada, porque
     // esos vecinos todavía no tienen malla.

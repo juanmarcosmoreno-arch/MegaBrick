@@ -107,6 +107,8 @@ export class Multiplayer {
     this._editBudget = new Map(); // fichas por invitado (límite de cambios)
     this._editQueue = new Map(); // cambios en fila por invitado
     this._editListener = (e) => this._onLocalEdit(e);
+    /** Cambios de bloques que llegaron del anfitrión, a aplicar en el próximo frame. */
+    this._incomingEdits = [];
     this._clock = () => performance.now() / 1000;
   }
 
@@ -234,6 +236,7 @@ export class Multiplayer {
     this.role = null;
     this.code = null;
     this._byPeer.clear();
+    this._incomingEdits = [];
     // Los animales del anfitrión se van: ahora aparecen los propios.
     if (wasGuest) this.game.animals.reset({ remote: false });
     if (wasGuest && adopt) this.game.saves.adopt();
@@ -275,6 +278,14 @@ export class Multiplayer {
 
   update(dt) {
     if (!this.active) return;
+    if (this._incomingEdits.length) {
+      const edits = this._incomingEdits;
+      this._incomingEdits = [];
+      const world = this.game.world;
+      world.batch(() => {
+        for (const e of edits) world.editBlock(e.x, e.y, e.z, e.id, 'remote');
+      });
+    }
     const now = this._clock();
     for (const p of this.players.values()) p.update(dt, now);
     if (this.role === 'host') {
@@ -527,8 +538,10 @@ export class Multiplayer {
       }
       case MSG.EDIT: {
         const edit = cleanEdit(msg);
-        // Puede ser un cambio propio que vuelve en el orden del anfitrión.
-        if (edit && this.active) this.game.world.editBlock(edit.x, edit.y, edit.z, edit.id, 'remote');
+        // Puede ser un cambio propio que vuelve en el orden del anfitrión. Se
+        // juntan y se aplican una vez por frame (ver update): un circuito
+        // grande manda muchos de golpe y así cada chunk se rearma una vez.
+        if (edit && this.active) this._incomingEdits.push(edit);
         break;
       }
       case MSG.JOIN: {
@@ -563,6 +576,7 @@ export class Multiplayer {
       pending.reject(new Error('Esa partida usa otra versión de Megabrick.'));
       return;
     }
+    this._incomingEdits = [];
     // El mundo del anfitrión: misma semilla y sus cambios. Es suyo: acá no
     // se guarda (salvo que después se siga jugando solo en él).
     const host = cleanPlayerInfo(msg.host);

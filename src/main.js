@@ -881,7 +881,11 @@ class Game {
     this.multiplayer.update(dt);
     // Los circuitos andan jugando (o siempre, con una partida); en la
     // partida los calcula el anfitrión y los invitados reciben los cambios.
-    this.circuits.enabled = this.multiplayer.role !== 'guest' && (this.state === STATE.PLAYING || this.multiplayer.active);
+    const guest = this.multiplayer.role === 'guest';
+    // Un invitado que se queda con el mundo (el anfitrión se fue) los retoma.
+    if (this.circuits.active === false && !guest) this.circuits.attach(this.world);
+    this.circuits.active = !guest;
+    this.circuits.enabled = this.state === STATE.PLAYING || this.multiplayer.active;
     this.circuits.update(dt, this.circuitBodies());
     // Los animales se mueven jugando (o siempre, con una partida).
     if (this.inGame || this.multiplayer.active) {

@@ -17,8 +17,8 @@
 // lo acaricia y clic izquierdo lo empuja.
 
 import * as THREE from 'three';
-import { BLOCK, DIRS6, SHAPE, getBlock } from '../world/blocks.js';
-import { collisionBoxesAt } from '../world/shapes.js';
+import { BLOCK, SHAPE, getBlock } from '../world/blocks.js';
+import { collisionBoxesAt, supportedBy } from '../world/shapes.js';
 import { CHUNK_HEIGHT } from '../world/Chunk.js';
 import { PAD } from './Gamepad.js';
 import { raycast } from './Raycast.js';
@@ -216,15 +216,7 @@ export class BlockInteraction {
 
   /** Rompe lo que estaba sostenido por el bloque (x, y, z), que ya no está. */
   _dropAttached(x, y, z) {
-    for (const [dx, dy, dz] of DIRS6) {
-      const nx = x + dx;
-      const ny = y + dy;
-      const nz = z + dz;
-      const n = getBlock(this.world.getBlock(nx, ny, nz));
-      const a = n.attach ?? (n.soil ? DOWN : null);
-      // Sostenido por el de (x, y, z): su "attach" apunta para acá.
-      if (a && nx + a[0] === x && ny + a[1] === y && nz + a[2] === z) this._clear(nx, ny, nz);
-    }
+    for (const [nx, ny, nz] of supportedBy(this.world, x, y, z)) this._clear(nx, ny, nz);
   }
 
   /**
@@ -372,9 +364,6 @@ export class BlockInteraction {
     return boxes.some((b) => [0, 1, 2].every((a) => cell[a] + b[a] < hi[a] - EPS && cell[a] + b[a + 3] > lo[a] + EPS));
   }
 }
-
-/** Abajo (lo que sostiene a una planta). */
-const DOWN = [0, -1, 0];
 
 /** ¿El bloque sostiene a otro apoyado (un cubo sólido entero)? */
 function holds(b) {

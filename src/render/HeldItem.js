@@ -45,7 +45,7 @@ export class HeldItem {
 
   /**
    * Dispara la animación de usar el bloque (romper o poner). Si ya se está
-   * balanceando, el siguiente espera a que termine (como la pinza de coco):
+   * balanceando, el siguiente espera a que termine (como el brazo del personaje):
    * así no salta a mitad de camino.
    */
   swing() {

@@ -7,11 +7,12 @@
 import { BLOCK, BLOCKS } from '../world/blocks.js';
 import { CHUNK_HEIGHT } from '../world/Chunk.js';
 import { DEFAULT_VARIANT, EXPRESSIONS, isVariant } from '../player/colors.js';
+import { DEFAULT_CHARACTER, isCharacter } from '../player/characters/index.js';
 import { ACTIONS } from '../animals/Animal.js';
 import { SPECIES_IDS } from '../animals/species/index.js';
 
 /** Versión del protocolo: invitado y anfitrión tienen que coincidir. */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Prefijo de los IDs en el servidor de PeerJS (evita choques con otras apps). */
 const PEER_PREFIX = 'megabrick-v1-';
@@ -102,7 +103,8 @@ export function cleanPosition(m) {
  * Valida el estado de un jugador. Devuelve una copia limpia o null.
  * Campos: x, y, z, yaw, pitch, speed, flying, expr (expresión), held
  * (bloque en la mano), swing (contador de acciones, para animar el brazo),
- * color (del personaje, por si lo cambia durante la partida) y ts (la hora
+ * color (de la ropa) y character (el personaje), por si los cambia durante
+ * la partida, y ts (la hora
  * de quien lo mandó, en segundos, para moverlo suave aunque los mensajes
  * lleguen a destiempo).
  */
@@ -121,6 +123,7 @@ export function cleanState(m) {
     held: Number.isInteger(m.held) && BLOCKS[m.held]?.tiles ? m.held : BLOCK.GRASS,
     swing: Number.isInteger(m.swing) ? m.swing : 0,
     color: isVariant(m.color) ? m.color : null,
+    character: isCharacter(m.character) ? m.character : null,
     ts: isNum(m.ts) ? m.ts : null,
   };
 }
@@ -163,12 +166,13 @@ export function cleanAnimalAct(m) {
   return { id: m.id, act: m.act };
 }
 
-/** Valida la ficha de un jugador (id, nombre y color). */
+/** Valida la ficha de un jugador (id, nombre, color y personaje). */
 export function cleanPlayerInfo(m) {
   if (!m || typeof m !== 'object' || typeof m.id !== 'string' || !m.id || m.id.length > 16) return null;
   return {
     id: m.id,
     name: sanitizeName(m.name),
     color: isVariant(m.color) ? m.color : DEFAULT_VARIANT,
+    character: isCharacter(m.character) ? m.character : DEFAULT_CHARACTER,
   };
 }

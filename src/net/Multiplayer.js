@@ -196,7 +196,7 @@ export class Multiplayer {
       });
       session.onMessage = (msg) => this._guestOnMessage(msg);
       session.onDisconnect = () => this._hostLeft();
-      this._sendToHost({ t: MSG.HELLO, v: PROTOCOL_VERSION, name: this.name, color: this.game.avatar.variant });
+      this._sendToHost({ t: MSG.HELLO, v: PROTOCOL_VERSION, name: this.name, color: this.game.avatar.variant, character: this.game.avatar.character });
       await this._unlessCancelled(pending, welcome);
     } catch (err) {
       clearTimeout(this._pendingWelcome?.timer);
@@ -328,6 +328,7 @@ export class Multiplayer {
       held: g.hotbar.selectedBlock,
       swing: this._swing,
       color: g.avatar.variant,
+      character: g.avatar.character,
       ts: this._clock(),
     };
   }
@@ -476,13 +477,13 @@ export class Multiplayer {
       reject(`La partida está llena (máximo ${MAX_PLAYERS} jugadores).`);
       return;
     }
-    const info = cleanPlayerInfo({ id: `j${++this._nextGuest}`, name: msg.name, color: msg.color });
+    const info = cleanPlayerInfo({ id: `j${++this._nextGuest}`, name: msg.name, color: msg.color, character: msg.character });
     this._byPeer.set(from, info.id);
     const g = this.game;
     // Los demás, con su posición (para que el nuevo no aparezca encima de nadie).
     const others = [...this.players.values()].map((p) => {
       const s = p.lastState;
-      return { id: p.id, name: p.name, color: p.color, ...(s && { x: s.x, y: s.y, z: s.z }) };
+      return { id: p.id, name: p.name, color: p.color, character: p.character, ...(s && { x: s.x, y: s.y, z: s.z }) };
     });
     this.session.send(from, {
       t: MSG.WELCOME,
@@ -491,7 +492,7 @@ export class Multiplayer {
       seedText: g.options.seedText,
       generation: g.generator.generation,
       edits: g.world.exportEdits(),
-      host: { id: HOST_ID, name: this.name, color: g.avatar.variant },
+      host: { id: HOST_ID, name: this.name, color: g.avatar.variant, character: g.avatar.character },
       players: others,
       // Dónde está el anfitrión: el invitado aparece a su lado.
       spawn: { x: g.player.position.x, y: g.player.position.y, z: g.player.position.z },

@@ -1,10 +1,10 @@
-// Colores y expresiones de Coco, el personaje. Son los mismos en el juego,
-// en la pantalla de inicio y en el multijugador (se mandan por la red como
-// clave: 'violeta', 'verde', ...).
+// Colores de la ropa del personaje y sus expresiones. Son los mismos en el
+// juego, en la pantalla de inicio y en el multijugador (se mandan por la red
+// como clave: 'violeta', 'verde', ...).
 
 /**
- * Colores del personaje.
- * - color: el que recibe Coco (coco.js tiene una paleta afinada para cada uno).
+ * Colores de la ropa.
+ * - color: el que recibe el personaje (characters/humanoid.js saca sus tonos).
  * - swatch: cómo se ve en los botones de color y en la lista de jugadores.
  */
 export const VARIANTS = Object.freeze({
@@ -16,8 +16,8 @@ export const VARIANTS = Object.freeze({
   negro: { name: 'Negro', color: '#2e2f33', swatch: '#2b2836' },
 });
 
-/** El violeta es el Coco original. */
-export const DEFAULT_VARIANT = 'violeta';
+/** El de entrada. */
+export const DEFAULT_VARIANT = 'verde';
 
 /** ¿Es una clave de color válida? (sin aceptar claves heredadas). */
 export function isVariant(key) {

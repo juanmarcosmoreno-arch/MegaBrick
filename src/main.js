@@ -16,6 +16,7 @@ import { Avatar } from './player/Avatar.js';
 import { VIEW, ViewCamera } from './player/ViewCamera.js';
 import { CharacterPreview } from './render/CharacterPreview.js';
 import { DEFAULT_VARIANT, VARIANTS, isVariant } from './player/colors.js';
+import { CHARACTERS, DEFAULT_CHARACTER, isCharacter } from './player/characters/index.js';
 import { loadPreference, savePreference } from './save/Preferences.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Hud } from './ui/Hud.js';
@@ -121,10 +122,12 @@ class Game {
     // --- Personaje (se ve en tercera persona y en la pantalla de inicio) ---
     let color = loadPreference('color', DEFAULT_VARIANT);
     if (!isVariant(color)) color = DEFAULT_VARIANT;
-    this.avatar = new Avatar(color);
+    let character = loadPreference('personaje', DEFAULT_CHARACTER);
+    if (!isCharacter(character)) character = DEFAULT_CHARACTER;
+    this.avatar = new Avatar(color, character);
     this.avatar.root.visible = false;
     this.scene.add(this.avatar.root);
-    this.preview = new CharacterPreview(color);
+    this.preview = new CharacterPreview(color, character);
     // Reflejos suaves para el plástico del personaje: un ambiente de
     // "habitación" generado por código (solo afecta materiales estándar).
     const pmrem = new THREE.PMREMGenerator(this.renderer);
@@ -136,10 +139,10 @@ class Game {
     }
     // En el juego, el reflejo depende de la hora (lo maneja el cielo).
     this.sky.setTime(START_TIME);
-    // Armar ya los shaders de Coco (con las luces y el reflejo del juego):
-    // si no, el juego se traba la primera vez que se ve uno (al apretar V o
-    // cuando entra alguien a la partida). Como el Coco propio sigue vivo,
-    // tampoco se pierden cuando se va el último jugador.
+    // Armar ya los shaders del personaje (con las luces y el reflejo del
+    // juego): si no, el juego se traba la primera vez que se ve uno (al
+    // apretar V o cuando entra alguien a la partida). Como el personaje
+    // propio sigue vivo, tampoco se pierden cuando se va el último jugador.
     this.renderer.compile(this.avatar.root, this.camera, this.scene);
     this.stageEl = document.getElementById('character-stage');
     // La cámara va en la escena para poder colgarle el bloque en la mano.
@@ -209,6 +212,9 @@ class Game {
       colors: VARIANTS,
       color,
       onColor: (key) => this.setAvatarColor(key),
+      characters: CHARACTERS,
+      character,
+      onCharacter: (id) => this.setAvatarCharacter(id),
     });
 
     // --- Multijugador ---
@@ -696,6 +702,13 @@ class Game {
     this.preview.setVariant(key);
     savePreference('color', key);
     this.multiplayerMenu?.render(); // el color propio en la lista de jugadores
+  }
+
+  /** Cambia de personaje y lo recuerda para la próxima vez. */
+  setAvatarCharacter(id) {
+    this.avatar.setCharacter(id);
+    this.preview.setCharacter(id);
+    savePreference('personaje', id);
   }
 
   /** Cambio de captura del mouse (o del juego con el joystick): entra o sale del modo de juego. */

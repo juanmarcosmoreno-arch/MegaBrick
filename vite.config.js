@@ -9,7 +9,7 @@ export default defineConfig({
   base: `/${repo}/`,
   build: {
     target: 'es2022',
-    // Todo el juego va en un solo archivo (three.js, el mundo, Coco y los
+    // Todo el juego va en un solo archivo (three.js, el mundo, los personajes y los
     // animales hechos por código): ~1,1 MB, ~330 kB comprimido.
     chunkSizeWarningLimit: 1400,
   },

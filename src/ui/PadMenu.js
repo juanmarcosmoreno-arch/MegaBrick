@@ -134,7 +134,7 @@ export class PadMenu {
 
   /** Lo que se puede elegir en el menú. */
   _candidates(layer) {
-    return [...layer.querySelectorAll(`${FOCUSABLE}, .swatch`)].filter(
+    return [...layer.querySelectorAll(`${FOCUSABLE}, .swatch, .character-option`)].filter(
       (el) => !el.disabled && isVisible(el),
     );
   }

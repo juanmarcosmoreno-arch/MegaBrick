@@ -8,9 +8,9 @@ import { Avatar } from '../player/Avatar.js';
 /** Expresiones que muestra la vitrina, en orden. */
 const SHOWCASE = ['normal', 'feliz', 'sorprendido', 'determinado'];
 const EXPRESSION_SECONDS = 2.6;
-/** Altura de la cámara y del punto al que mira (Coco mide ~1,65 con la antena). */
-const CAMERA_Y = 1.0;
-const LOOK_Y = 0.8;
+/** Altura de la cámara y del punto al que mira (los personajes miden ~1,75 con el pelo o el casco). */
+const CAMERA_Y = 1.05;
+const LOOK_Y = 0.9;
 
 /** Sombra suave bajo los pies (un degradé radial en un plano). */
 function shadowMesh() {
@@ -34,9 +34,10 @@ function shadowMesh() {
 
 export class CharacterPreview {
   /**
-   * @param {string} variant color inicial
+   * @param {string} variant color de la ropa
+   * @param {string} [character] personaje
    */
-  constructor(variant) {
+  constructor(variant, character) {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(30, 0.6, 0.1, 50);
     this.camera.position.set(0, CAMERA_Y, 4.6);
@@ -46,12 +47,12 @@ export class CharacterPreview {
     const key = new THREE.DirectionalLight(0xfff2de, 2.0);
     key.position.set(2, 3, 4);
     this.scene.add(key);
-    // Contraluz cálido: el brillo dorado alrededor de Coco.
+    // Contraluz cálido: un brillo dorado alrededor del personaje.
     const rim = new THREE.DirectionalLight(0xffc27a, 1.1);
     rim.position.set(-3, 2, -3);
     this.scene.add(rim);
 
-    this.avatar = new Avatar(variant);
+    this.avatar = new Avatar(variant, character);
     this.scene.add(this.avatar.root);
     this.shadow = shadowMesh();
     this.scene.add(this.shadow);
@@ -63,6 +64,10 @@ export class CharacterPreview {
 
   setVariant(variant) {
     this.avatar.setVariant(variant);
+  }
+
+  setCharacter(character) {
+    this.avatar.setCharacter(character);
   }
 
   update(dt) {

@@ -251,6 +251,44 @@ body {
   gap: 8px;
 }
 
+/* Botones para elegir el personaje (con su nombre), de a cuatro por fila. */
+.character-picker {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 6px;
+  justify-content: center;
+}
+
+.character-option {
+  padding: 4px 8px;
+  border: 2px solid rgba(240, 234, 228, 0.18);
+  border-radius: 6px;
+  background: rgba(240, 234, 228, 0.06);
+  color: var(--cream);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition:
+    transform 0.08s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.character-option:hover {
+  transform: translateY(-2px);
+}
+
+.character-option[aria-checked='true'] {
+  border-color: var(--cream);
+  background: rgba(240, 234, 228, 0.16);
+}
+
+.character-option:focus-visible,
+.pad-nav .character-option:focus {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
+}
+
 .swatch {
   width: 26px;
   height: 26px;

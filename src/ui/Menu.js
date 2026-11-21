@@ -9,11 +9,14 @@ export class Menu {
    * @param {() => void} options.onPlay "Jugar" en la pantalla de inicio
    * @param {() => void} options.onResume "Continuar" (o clic) en la pausa
    * @param {Record<string, {name: string, swatch: string}>} options.colors
-   *   colores del personaje para elegir
+   *   colores de la ropa para elegir
    * @param {string} options.color color elegido al empezar
    * @param {(key: string) => void} options.onColor al elegir otro color
+   * @param {{id: string, name: string}[]} options.characters personajes para elegir
+   * @param {string} options.character personaje elegido al empezar
+   * @param {(id: string) => void} options.onCharacter al elegir otro personaje
    */
-  constructor({ onPlay, onResume, colors, color, onColor }) {
+  constructor({ onPlay, onResume, colors, color, onColor, characters, character, onCharacter }) {
     this.title = document.getElementById('title-screen');
     this.pause = document.getElementById('pause-screen');
     this.titleMsg = document.getElementById('title-msg');
@@ -30,7 +33,18 @@ export class Menu {
     // En la pausa, un clic en cualquier parte también vuelve al juego.
     this.pause.addEventListener('click', () => onResume());
 
-    this._buildSwatches(colors, color, onColor);
+    this.characterButtons = this._buildRadioGroup(
+      document.getElementById('character-picker'),
+      characters.map((c) => ({ key: c.id, label: c.name, className: 'character-option', text: c.name })),
+      character,
+      onCharacter,
+    );
+    this.swatches = this._buildRadioGroup(
+      document.getElementById('color-swatches'),
+      Object.entries(colors).map(([key, c]) => ({ key, label: c.name, className: 'swatch', background: c.swatch })),
+      color,
+      onColor,
+    );
 
     // Megabrick es para computadora: en pantallas táctiles sin mouse se avisa.
     const touchOnly =
@@ -39,44 +53,49 @@ export class Menu {
   }
 
   /**
-   * Botones de color del personaje: un grupo de opciones tipo radio. Con el
-   * teclado, Tab entra al grupo y las flechas cambian de color.
+   * Un grupo de opciones tipo radio (personajes o colores). Con el teclado,
+   * Tab entra al grupo y las flechas cambian de opción.
+   * @param {HTMLElement} box
+   * @param {{key: string, label: string, className: string, text?: string, background?: string}[]} options
+   * @param {string} selected
+   * @param {(key: string) => void} onSelect
+   * @returns {HTMLButtonElement[]}
    */
-  _buildSwatches(colors, selected, onColor) {
-    const box = document.getElementById('color-swatches');
+  _buildRadioGroup(box, options, selected, onSelect) {
     box.textContent = '';
-    const keys = Object.keys(colors);
-    this.swatches = [];
+    const buttons = [];
     const select = (index, focus) => {
-      this.swatches.forEach((s, j) => {
-        s.setAttribute('aria-checked', String(index === j));
-        s.tabIndex = index === j ? 0 : -1;
+      buttons.forEach((b, j) => {
+        b.setAttribute('aria-checked', String(index === j));
+        b.tabIndex = index === j ? 0 : -1;
       });
-      if (focus) this.swatches[index].focus();
-      onColor(keys[index]);
+      if (focus) buttons[index].focus();
+      onSelect(options[index].key);
     };
-    keys.forEach((key, i) => {
-      const c = colors[key];
+    options.forEach((o, i) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'swatch';
-      b.style.background = c.swatch;
-      b.title = c.name;
+      b.className = o.className;
+      if (o.background) b.style.background = o.background;
+      if (o.text) b.textContent = o.text;
+      b.title = o.label;
+      b.dataset.key = o.key;
       b.setAttribute('role', 'radio');
-      b.setAttribute('aria-label', c.name);
-      b.setAttribute('aria-checked', String(key === selected));
-      b.tabIndex = key === selected ? 0 : -1;
+      b.setAttribute('aria-label', o.label);
+      b.setAttribute('aria-checked', String(o.key === selected));
+      b.tabIndex = o.key === selected ? 0 : -1;
       b.addEventListener('click', () => select(i, false));
-      this.swatches.push(b);
+      buttons.push(b);
       box.appendChild(b);
     });
     box.addEventListener('keydown', (e) => {
       const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-      const i = this.swatches.indexOf(document.activeElement);
+      const i = buttons.indexOf(document.activeElement);
       if (!step || i < 0) return;
       e.preventDefault();
-      select((i + step + keys.length) % keys.length, true);
+      select((i + step + options.length) % options.length, true);
     });
+    return buttons;
   }
 
   showTitle() {

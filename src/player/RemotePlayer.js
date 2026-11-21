@@ -1,4 +1,4 @@
-// Otro jugador de la partida: su personaje (con su color), su nombre arriba
+// Otro jugador de la partida: su personaje (con su color de ropa), su nombre arriba
 // de la cabeza y un movimiento suave aunque los datos lleguen de a saltos.
 //
 // Los estados llegan unas 15 veces por segundo; se dibuja al jugador con un
@@ -60,20 +60,22 @@ export class RemotePlayer {
    * @param {object} info
    * @param {string} info.id id en la red
    * @param {string} info.name nombre (ya validado)
-   * @param {string} info.color variante de color del personaje
+   * @param {string} info.color color de la ropa
+   * @param {string} [info.character] personaje (normal, soldado...)
    * @param {THREE.Scene} scene
    * @param {THREE.Material[]} blockMaterials para el bloque en la mano
    */
-  constructor({ id, name, color }, scene, blockMaterials) {
+  constructor({ id, name, color, character }, scene, blockMaterials) {
     this.id = id;
     this.name = name;
     this.color = color;
+    this.character = character;
     this.scene = scene;
     this.blockMaterials = blockMaterials;
-    this.avatar = new Avatar(color);
+    this.avatar = new Avatar(color, character);
     this.avatar.root.visible = false; // hasta recibir la primera posición
     this.tag = nameTag(name);
-    this.tag.position.y = 1.95; // sobre la antena de Coco
+    this.tag.position.y = 2.0; // sobre la cabeza (y lo que lleve puesto)
     this.avatar.root.add(this.tag);
     scene.add(this.avatar.root);
 
@@ -115,6 +117,10 @@ export class RemotePlayer {
     }
     if (this.swing !== null && state.swing !== this.swing) this.avatar.swing();
     this.swing = state.swing;
+    if (state.character && state.character !== this.character) {
+      this.character = state.character;
+      this.avatar.setCharacter(state.character);
+    }
     if (state.color && state.color !== this.color) {
       this.color = state.color;
       this.avatar.setVariant(state.color);

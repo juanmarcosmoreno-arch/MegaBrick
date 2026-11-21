@@ -75,7 +75,7 @@ export class RemotePlayer {
     this.avatar = new Avatar(color, character);
     this.avatar.root.visible = false; // hasta recibir la primera posición
     this.tag = nameTag(name);
-    this.tag.position.y = 2.0; // sobre la cabeza (y lo que lleve puesto)
+    this.tag.position.y = 2.25; // sobre la cabeza (y el casco o el sombrero que lleve puesto)
     this.avatar.root.add(this.tag);
     scene.add(this.avatar.root);
 

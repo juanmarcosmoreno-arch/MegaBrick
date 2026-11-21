@@ -201,7 +201,10 @@ export const paint = {
     }
     // Franja del short del lado de afuera y el detalle de los botines.
     const out = brush(ctx, r[side]);
-    for (let y = 0; y < 3; y++) out.px(1, y, pal.color), out.px(2, y, pal.colorDark);
+    for (let y = 0; y < 3; y++) {
+      out.px(1, y, pal.color);
+      out.px(2, y, pal.colorDark);
+    }
     for (const k of ['left', 'right']) {
       const b = brush(ctx, r[k]);
       const fx = (i) => (k === 'right' ? i : 3 - i);

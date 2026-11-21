@@ -47,16 +47,27 @@ function camo(b, cols, rnd) {
   }
 }
 
+/**
+ * Cejas por debajo del casco: el ala tapa la fila 2 desde arriba, así que
+ * las fruncidas bajan sobre el ojo para que se lean.
+ */
+function brows(b, expr, blink, color) {
+  for (const x of [2, 6]) {
+    if (expr === 'determinado') {
+      b.rect(x, 3, 2, 1, color);
+      if (!blink) b.px(x < 5 ? x + 1 : x, 4, color);
+    } else {
+      b.rect(x, 2, 2, 1, color);
+    }
+  }
+}
+
 /** La cara: ojos marrones oscuros, cejas gruesas, mandíbula con barba de un día. */
 export function face(b, expr, blink) {
   const brow = tone(HAIR, 0.9);
   const mouth = [118, 62, 48];
-  // Las cejas van siempre en la fila 2: más arriba las tapa el casco.
-  paintFace(b, expr, blink, { eye: [52, 34, 22], mouth, brow: expr === 'sorprendido' ? null : brow });
-  if (expr === 'sorprendido') {
-    b.rect(2, 2, 2, 1, brow);
-    b.rect(6, 2, 2, 1, brow);
-  }
+  paintFace(b, expr, blink, { eye: [52, 34, 22], mouth, brow: null });
+  brows(b, expr, blink, brow);
   if (expr === 'normal' && !blink) {
     // Serio pero amable: una comisura apenas levantada.
     b.px(6, 7, tone(SKIN, 0.82));

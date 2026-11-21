@@ -25,10 +25,18 @@ function suit(b, rnd) {
 export function face(b, expr, blink) {
   paintFace(b, expr, blink, { eye: [34, 22, 16], white: [250, 248, 242], mouth: [44, 16, 18], brow: HAIR });
   if (expr === 'feliz') {
-    // Sonrisa con dientes.
-    b.rect(4, 9, 2, 1, [240, 236, 226]);
-    b.px(3, 8, [44, 16, 18]);
-    b.px(6, 8, [44, 16, 18]);
+    // Sonrisa grande con dientes y cachetes que brillan (se lee bien en la piel oscura).
+    const m = [44, 16, 18];
+    b.px(2, 8, m);
+    b.px(7, 8, m);
+    b.rect(3, 9, 4, 1, m);
+    b.rect(3, 8, 4, 1, [244, 240, 230]);
+    b.px(1, 6, tone(SKIN, 1.3));
+    b.px(8, 6, tone(SKIN, 1.3));
+    if (!blink) {
+      b.px(3, 5, tone(SKIN, 1.25));
+      b.px(7, 5, tone(SKIN, 1.25));
+    }
   }
 }
 

@@ -49,7 +49,6 @@ export function face(b, expr, blink) {
     } else {
       b.rect(x, ey, 2, 2, eye);
       b.px(outer, ey, white); // brillito
-      if (expr === 'determinado') b.px(inner, ey, tone(SKIN, 0.82)); // párpado
     }
     // Cejas.
     if (expr === 'determinado') {
@@ -79,7 +78,6 @@ export function face(b, expr, blink) {
     b.px(4, 7, tone(mouth, 0.7));
   } else if (expr === 'determinado') {
     b.rect(3, 8, 4, 1, mouth);
-    b.px(6, 7, mouth);
   } else {
     b.rect(4, 8, 2, 1, mouth);
     b.px(3, 7, mouth);

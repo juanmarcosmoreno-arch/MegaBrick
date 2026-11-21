@@ -13,7 +13,7 @@ const SKIN = [246, 212, 184];
 const FRECKLE = [208, 140, 100];
 const HAIR = [214, 168, 92];
 const HAIR_SHINE = [244, 214, 150];
-const CAP = [48, 50, 60];
+const CAP = [192, 54, 48];
 const DENIM = [120, 150, 186];
 const SOCK = [240, 240, 234];
 const SHOE = [58, 56, 64];
@@ -70,12 +70,12 @@ export function face(b, expr, blink) {
       b.rect(x, ey, 2, 2, eye);
       b.px(outer, ey, white);
       b.px(inner, ey + 1, tone(eye, 0.6));
-      if (expr === 'determinado') b.rect(x, ey, 2, 1, tone(SKIN, 0.84)); // ojos entrecerrados
+      if (expr === 'determinado') b.px(outer, ey, tone(SKIN, 0.84)); // párpado
     }
     // Cejas (finitas, del color del pelo).
     if (expr === 'determinado') {
       b.px(inner, ey - 1, brow);
-      b.px(outer, ey - 1, tone(SKIN, 0.9));
+      b.px(outer, ey - 2, brow);
     } else if (expr === 'sorprendido') {
       b.px(inner, ey - 2, brow);
       b.px(outer, ey - 2, brow);
@@ -176,19 +176,25 @@ export function accessories(kit, parts) {
       f.px(2, 2, tone(SOCK, 0.85));
       f.px(5, 1, SOCK);
       f.px(5, 2, tone(SOCK, 0.85));
-      f.px(5, 3, SOCK);
       // El rayo.
       for (const [x, y] of [
+        [4, 3],
         [5, 3],
+        [3, 4],
         [4, 4],
+        [2, 5],
         [3, 5],
         [4, 5],
         [5, 5],
+        [3, 6],
         [4, 6],
+        [2, 7],
         [3, 7],
+        [2, 8],
       ])
         f.px(x, y, ink);
-      f.px(6, 4, tone(pal.color, 0.8)); // sombrita del rayo
+      f.px(6, 3, tone(pal.color, 0.8)); // sombrita del rayo
+      f.px(6, 5, tone(pal.color, 0.8));
       // Bolsillo canguro.
       f.px(0, 7, pal.colorDark);
       f.px(1, 8, pal.colorDark);
@@ -229,22 +235,21 @@ export function accessories(kit, parts) {
       for (const k of ALL) noisy(brush(ctx, r[k]), WOOD, 0.06, rnd);
       // Arriba (contra la espalda): la lija negra.
       noisy(brush(ctx, r.front), [40, 40, 44], 0.1, rnd);
-      // Abajo (para afuera): el dibujo, con franjas del color elegido.
+      // Abajo (para afuera): el dibujo, un sol naranja sobre crema.
       const b = brush(ctx, r.back);
       noisy(b, [240, 232, 210], 0.03, rnd);
-      for (let y = 0; y < b.h; y++) {
-        for (let x = 0; x < b.w; x++) {
-          if ((x + y) % 5 === 0 || (x + y) % 5 === 1) b.px(x, y, pal.color);
-        }
-      }
-      b.rect(0, 0, b.w, 1, [40, 40, 44]);
-      b.rect(0, b.h - 1, b.w, 1, [40, 40, 44]);
-      b.rect(1, 6, 2, 2, [230, 70, 60]); // la calcomanía
+      b.rect(0, 0, b.w, 2, tone(WOOD, 0.8));
+      b.rect(0, b.h - 2, b.w, 2, tone(WOOD, 0.8));
+      b.rect(1, 4, 2, 6, [236, 96, 56]);
+      b.rect(0, 5, 4, 4, [236, 96, 56]);
+      b.rect(1, 6, 2, 2, [252, 200, 70]);
+      b.px(1, 3, [40, 40, 44]);
+      b.px(2, 10, [40, 40, 44]);
     },
     [0.5, 0.5, 0.5],
   );
-  board.position.set(0, 4.5 * PX, -3.5 * PX);
-  board.rotation.z = 0.42;
+  board.position.set(0, 3 * PX, -3.5 * PX);
+  board.rotation.z = 0.6;
   parts.body.add(board);
   for (const y of [-4.5, 4.5]) {
     const truck = kit.box(
@@ -279,23 +284,17 @@ export function accessories(kit, parts) {
       for (const k of ALL) noisy(brush(ctx, r[k]), CAP, 0.06, rnd);
       // Adelante se ve la parte de atrás de la gorra: la abertura con el pelo y la tira.
       const f = brush(ctx, r.front);
-      f.rect(4, 1, 3, 2, HAIR);
+      f.rect(3, 2, 5, 1, HAIR);
+      f.rect(4, 1, 3, 1, HAIR);
       f.px(5, 1, HAIR_SHINE);
-      f.rect(3, 1, 1, 1, tone(CAP, 1.5));
-      f.rect(7, 1, 1, 1, tone(CAP, 1.5));
-      f.px(3, 2, tone(CAP, 1.3));
-      f.px(7, 2, tone(CAP, 1.3));
+      f.px(4, 2, HAIR_SHINE);
+      f.rect(4, 0, 3, 1, tone(CAP, 0.7)); // la tira
+      f.px(6, 0, [200, 200, 206]); // la hebilla
       // Atrás, el frente de la gorra con un logo del color elegido.
       const bk = brush(ctx, r.back);
-      bk.rect(4, 0, 3, 2, pal.color);
-      bk.px(5, 0, pal.colorLight);
-      // Costuras y el botón de arriba.
-      const t = brush(ctx, r.top);
-      for (let i = 0; i < 11; i++) {
-        t.px(5, i, tone(CAP, 0.8));
-        t.px(i, 5, tone(CAP, 0.8));
-      }
-      t.px(5, 5, pal.color);
+      bk.rect(4, 0, 3, 2, [244, 236, 214]);
+      bk.px(5, 1, pal.color);
+      // Costura de abajo.
       for (const k of SIDES) brush(ctx, r[k]).rect(0, 2, r[k].w, 1, tone(CAP, 0.8));
       const bt = brush(ctx, r.bottom); // solo el borde (el medio está adentro de la cabeza)
       bt.clear(1, 1, 9, 9);
@@ -304,6 +303,23 @@ export function accessories(kit, parts) {
   );
   crown.position.set(0, 8 * PX, 0);
   parts.head.add(crown);
+  const dome = kit.box(
+    9,
+    1,
+    9,
+    (ctx, r, pal, rnd) => {
+      for (const k of ALL) noisy(brush(ctx, r[k]), tone(CAP, 1.05), 0.06, rnd);
+      const t = brush(ctx, r.top);
+      for (let i = 0; i < 9; i++) {
+        t.px(4, i, tone(CAP, 0.8));
+        t.px(i, 4, tone(CAP, 0.8));
+      }
+      t.px(4, 4, [244, 236, 214]); // el botón
+    },
+    [0.5, 0, 0.5],
+  );
+  dome.position.set(0, 11 * PX, 0);
+  parts.head.add(dome);
   const brim = kit.box(
     6,
     1,
@@ -319,27 +335,6 @@ export function accessories(kit, parts) {
   brim.position.set(0, 8 * PX, -5.5 * PX);
   brim.rotation.x = -0.12;
   parts.head.add(brim);
-
-  // ---- Pelo largo que cae sobre la nuca.
-  const tail = kit.box(
-    10,
-    3,
-    2,
-    (ctx, r, pal, rnd) => {
-      for (const k of ALL) {
-        const b = brush(ctx, r[k]);
-        for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) hairPx(b, x, y, rnd);
-      }
-      // Puntas desparejas.
-      for (const k of ['back', 'front']) {
-        const b = brush(ctx, r[k]);
-        for (let x = 0; x < b.w; x++) if (x % 3 !== 1) b.clear(x, 2, 1, 1);
-      }
-    },
-    [0.5, 1, 0],
-  );
-  tail.position.set(0, 0, -5 * PX);
-  parts.head.add(tail);
 
   // ---- Bermuda ancha y zapatillas de suela gruesa, en cada pierna.
   for (const [leg, s] of [

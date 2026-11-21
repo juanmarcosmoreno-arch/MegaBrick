@@ -37,13 +37,27 @@ function cloth(b, pal, rnd) {
 /** La cara: ojos celestes, cejas coloradas, cachetes rosados y bigote. */
 export function face(b, expr, blink) {
   const brow = tone(HAIR, 0.85);
-  // Boca rosada (no un agujero) para que no compita con el bigote; abierta sí, oscura.
-  const mouth = expr === 'sorprendido' ? [110, 44, 44] : [198, 112, 100];
-  paintFace(b, expr, blink, { eye: [58, 104, 150], mouth, brow: expr === 'sorprendido' ? null : brow });
-  if (expr === 'sorprendido') {
-    // Las cejas no pueden subir más: arriba está el casco.
-    b.rect(2, 2, 2, 1, brow);
-    b.rect(6, 2, 2, 1, brow);
+  // La boca la pinta aparte: debajo del bigote se lee distinto.
+  paintFace(b, expr, blink, { eye: [58, 104, 150], mouth: SKIN, brow: null });
+  for (const x of [2, 6]) {
+    if (expr === 'determinado') {
+      // Cejas fruncidas, bajando sobre el ojo (la fila 2 la tapa el ala).
+      b.rect(x, 3, 2, 1, brow);
+      if (!blink) b.px(x < 5 ? x + 1 : x, 4, brow);
+    } else {
+      b.rect(x, 2, 2, 1, brow);
+    }
+  }
+  const lip = [196, 108, 98];
+  if (expr === 'feliz') {
+    b.rect(3, 9, 4, 1, lip);
+    b.rect(4, 9, 2, 1, [250, 244, 236]); // dientes
+  } else if (expr === 'sorprendido') {
+    b.rect(4, 8, 2, 2, [110, 44, 44]);
+  } else if (expr === 'determinado') {
+    b.rect(3, 8, 4, 1, tone(SKIN, 0.8)); // labios apretados
+  } else {
+    b.rect(4, 8, 2, 1, lip);
   }
   // Bigote espeso con las puntas caídas.
   const m = tone(HAIR, 0.82);

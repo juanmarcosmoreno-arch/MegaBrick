@@ -924,6 +924,12 @@ function addPiston(key, name, sticky) {
 addPiston('PISTON', 'Pistón', false);
 addPiston('PISTON_STICKY', 'Pistón pegajoso', true);
 
+// ---------------------------------------------------------------------------
+// Cuevas y minerales (etapa 15).
+// ---------------------------------------------------------------------------
+
+add('ORE_COAL', 'Mineral de carbón', 'ore_coal', { category: 'natural', hardness: 1.1 });
+
 Object.freeze(BLOCK);
 
 /** Devuelve la definición de un bloque (aire si el ID no existe). */

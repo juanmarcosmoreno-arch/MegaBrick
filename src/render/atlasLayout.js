@@ -156,6 +156,8 @@ export const TILE_NAMES = Object.freeze([
   'piston_face_sticky',
   'piston_back',
   'piston_rod',
+  // Cuevas y minerales (etapa 15).
+  'ore_coal',
 ]);
 
 const uvCache = new Map();

@@ -126,6 +126,7 @@ const C = {
   copper: [218, 122, 60],
   azurite: [64, 128, 234],
   solarite: [244, 204, 64],
+  coal: [38, 36, 40],
   // Materiales de construcción (etapa 9).
   walnut: [108, 72, 44],
   birch: [220, 194, 148],
@@ -554,6 +555,10 @@ const PAINTERS = {
 
   ore_solarite(p) {
     paintOre(p, C.solarite, [255, 250, 210], 3);
+  },
+
+  ore_coal(p) {
+    paintOre(p, C.coal, [86, 84, 92], 5);
   },
 
   planks(p) {

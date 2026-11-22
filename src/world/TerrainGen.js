@@ -7,10 +7,10 @@
 // mundo, y un chunk se puede generar solo, sin necesitar a sus vecinos.
 //
 // Este módulo es puro (sin DOM ni Three.js) para poder correr en un Web
-// Worker en la etapa 7. Más adelante se suman biomas y cuevas con ruido 3D
-// (ver los comentarios "Biomas" y "Cuevas").
+// Worker. Las cuevas (etapa 15) se tallan con ruido 3D: túneles largos que
+// serpentean y algunas cavernas grandes en lo hondo.
 
-import { createNoise2D } from 'simplex-noise';
+import { createNoise2D, createNoise3D } from 'simplex-noise';
 import { BLOCK, getBlock } from './blocks.js';
 import { CHUNK_HEIGHT, CHUNK_SIZE, CHUNK_VOLUME, Chunk } from './Chunk.js';
 
@@ -18,9 +18,18 @@ import { CHUNK_HEIGHT, CHUNK_SIZE, CHUNK_VOLUME, Chunk } from './Chunk.js';
  * Versión del generador. Los mundos guardan diferencias contra el terreno
  * generado, así que uno guardado con una versión se sigue generando con
  * esa: 1 es el terreno de las etapas 2 a 11 (solo robles, sin plantas ni
- * nieve); 2 suma pinos, jacarandás, nieve y plantas (etapa 12).
+ * nieve); 2 suma pinos, jacarandás, nieve y plantas (etapa 12); 3 suma
+ * cuevas y carbón (etapa 15).
  */
-export const GENERATION = 2;
+export const GENERATION = 3;
+
+/**
+ * La versión del generador de un mundo guardado o recibido: una de las que
+ * existen, o 1 si no la tiene (los guardados de antes de la etapa 12).
+ */
+export function validGeneration(g) {
+  return Number.isInteger(g) && g >= 1 && g <= GENERATION ? g : 1;
+}
 
 /** Nivel del mar: el agua llena todo lo que quede por debajo. */
 export const SEA_LEVEL = 40;
@@ -81,6 +90,18 @@ const ORES = [
   { id: BLOCK.ORE_SOLARITE, perChunk: 2, minY: 2, maxY: 20, size: [2, 4] },
 ];
 
+/** Carbón (desde la generación 3): el más común, de lo hondo hasta las montañas. */
+const COAL = { id: BLOCK.ORE_COAL, perChunk: 14, minY: 6, maxY: 100, size: [5, 12] };
+
+// Cuevas (generación 3).
+/** Debajo de esta altura no se talla nada (el piso del mundo queda entero). */
+const CAVE_FLOOR = 4;
+/** Grosor de los túneles: cuanto más grande, más anchos. */
+const TUNNEL_WIDTH = 0.014;
+/** Cavernas: solo por debajo de esta altura, donde el ruido supera CAVERN_LEVEL. */
+const CAVERN_TOP = 44;
+const CAVERN_LEVEL = 0.6;
+
 /**
  * Cada tipo de árbol: tronco, follaje y capas de la copa como [altura
  * relativa a la punta del tronco, radio].
@@ -101,7 +122,7 @@ export class TerrainGenerator {
    */
   constructor(seed, generation = GENERATION) {
     this.seed = seed >>> 0;
-    this.generation = generation === 1 ? 1 : GENERATION;
+    this.generation = validGeneration(generation);
     // Un ruido distinto para cada rasgo, todos derivados de la semilla.
     const noise = (salt) => createNoise2D(mulberry32(hash3(this.seed, salt, 7919)));
     this.nContinent = noise(1); // elevación general (llanuras / zonas bajas)
@@ -111,6 +132,10 @@ export class TerrainGenerator {
     this.nDetail = noise(5); // variación chica de la superficie
     this.nForest = noise(6); // zonas de bosque
     this.nDirt = noise(7); // espesor de la capa de tierra
+    const noise3 = (salt) => createNoise3D(mulberry32(hash3(this.seed, salt, 104729)));
+    this.nTunnelA = noise3(1); // túneles: donde los dos ruidos valen casi 0
+    this.nTunnelB = noise3(2);
+    this.nCavern = noise3(3); // cavernas grandes
   }
 
   /** Ruido fractal (fBm): suma de octavas, resultado aproximado en [-1, 1]. */
@@ -200,8 +225,9 @@ export class TerrainGenerator {
       }
     }
 
-    // 2) Vetas de mineral (solo reemplazan piedra).
-    // Cuevas: acá se van a tallar las cuevas con ruido 3D, antes de los árboles.
+    // 2) Cuevas, y después vetas de mineral (solo reemplazan piedra: las
+    // que tocan una cueva se ven en sus paredes).
+    if (this.generation >= 3) this._carveCaves(data, cx, cz);
     this._placeOres(data, cx, cz);
 
     // 3) Árboles: se miran también las celdas vecinas, porque la copa de un
@@ -214,9 +240,43 @@ export class TerrainGenerator {
     return { data, maxY: Math.min(CHUNK_HEIGHT - 1, maxY) };
   }
 
+  /**
+   * ¿Hay cueva en (x, y, z)? Túneles: donde dos ruidos 3D valen casi cero a
+   * la vez (una "línea" que serpentea). Cavernas: donde un ruido más suave
+   * es alto, solo en lo hondo.
+   */
+  isCave(x, y, z) {
+    const a = this.nTunnelA(x / 42, y / 22, z / 42);
+    const b = this.nTunnelB(x / 42, y / 22, z / 42);
+    if (a * a + b * b < TUNNEL_WIDTH) return true;
+    return y < CAVERN_TOP && this.nCavern(x / 64, y / 26, z / 64) > CAVERN_LEVEL + (y / CAVERN_TOP) * 0.12;
+  }
+
+  /**
+   * Talla las cuevas. Bajo el agua (y en la costa) dejan un techo de 6
+   * bloques, así el mar no queda colgando sobre un hueco; en tierra firme
+   * pueden salir a la superficie (las entradas).
+   */
+  _carveCaves(data, cx, cz) {
+    const x0 = cx * CHUNK_SIZE;
+    const z0 = cz * CHUNK_SIZE;
+    for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+      for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+        const x = x0 + lx;
+        const z = z0 + lz;
+        const h = this.heightAt(x, z);
+        const top = h <= SEA_LEVEL + 2 ? Math.min(h - 6, SEA_LEVEL - 6) : h;
+        for (let y = CAVE_FLOOR; y <= top; y++) {
+          if (this.isCave(x, y, z)) data[Chunk.index(lx, y, lz)] = BLOCK.AIR;
+        }
+      }
+    }
+  }
+
   _placeOres(data, cx, cz) {
     const rnd = mulberry32(hash3(this.seed, cx, cz, 31337));
-    for (const ore of ORES) {
+    const ores = this.generation >= 3 ? [...ORES, COAL] : ORES;
+    for (const ore of ores) {
       for (let v = 0; v < ore.perChunk; v++) {
         let x = Math.floor(rnd() * CHUNK_SIZE);
         let z = Math.floor(rnd() * CHUNK_SIZE);
@@ -288,6 +348,8 @@ export class TerrainGenerator {
       for (let gx = g0x; gx <= g1x; gx++) {
         const t = this.treeInCell(gx, gz);
         if (!t) continue;
+        // Si una cueva se comió el suelo, no hay árbol.
+        if (this.generation >= 3 && this.isCave(t.x, t.base - 1, t.z)) continue;
         const top = t.base + t.trunk; // primera altura por encima del tronco
         const { log, leaves, layers } = TREE_KINDS[t.kind];
         // Copa: capas de hojas (altura relativa a la punta del tronco y radio).
@@ -372,8 +434,10 @@ export class TerrainGenerator {
         const z = Math.round(Math.sin(a) * r);
         const h = this.heightAt(x, z);
         if (h <= SEA_LEVEL + 1 || h >= ROCK_LINE - 8) continue;
-        // Que no haya un tronco ni hojas donde van los pies y la cabeza.
+        // Que no haya un tronco ni hojas donde van los pies y la cabeza, ni
+        // la boca de una cueva debajo.
         if (!this._isClear(x, h + 1, z)) continue;
+        if (this.generation >= 3 && this.isCave(x, h, z)) continue;
         return { x: x + 0.5, y: h + 1, z: z + 0.5 };
       }
     }

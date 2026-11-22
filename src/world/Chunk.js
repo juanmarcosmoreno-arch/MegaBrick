@@ -37,12 +37,26 @@ export class Chunk {
     this.meshing = false;
     // Malla de Three.js del chunk (la administra World) o null.
     this.mesh = null;
+    // true si la malla quedó vieja solo por la luz (un cambio en un chunk
+    // vecino): se rearma en un worker, sin apuro.
+    this.lightOnly = false;
+    // Luz de cada celda (cielo << 4 | bloques), de la última malla, o null.
+    this.light = null;
   }
 
   /** Marca que la malla quedó vieja (cambió el chunk o un vecino). */
   touch() {
     this.version++;
     this.dirty = true;
+    this.lightOnly = false;
+  }
+
+  /** Marca que la luz cambió (por algo de un vecino): hay que rearmar la malla. */
+  touchLight() {
+    const pending = this.dirty && !this.lightOnly;
+    this.version++;
+    this.dirty = true;
+    this.lightOnly = !pending;
   }
 
   /** Índice lineal dentro de `data` para coordenadas locales. */

@@ -212,6 +212,15 @@ function paintOre(p, color, highlight, clusters) {
   }
 }
 
+/** Palito de antorcha: fuego en 3 filas desde `top` y madera debajo (7 filas), en las columnas `cols`. */
+function paintTorch(p, top, cols) {
+  const flame = [[255, 240, 160], [255, 196, 70], [236, 118, 34]];
+  for (const x of cols) {
+    flame.forEach((c, i) => p.set(x, top + i, c));
+    for (let y = top + 3; y < top + 10; y++) p.set(x, y, p.vary(x % 2 ? [96, 66, 38] : [128, 90, 52], 6));
+  }
+}
+
 /**
  * Ruido suave que se repite cada 16 px: valores al azar en una grilla de n x n
  * que envuelve, interpolados. Devuelve una función (x, y) → [-1, 1].
@@ -559,6 +568,28 @@ const PAINTERS = {
 
   ore_coal(p) {
     paintOre(p, C.coal, [86, 84, 92], 5);
+  },
+
+  // Antorcha (etapa 15): el palito ocupa las columnas 7 y 8 (lo que recorta
+  // la caja del piso); el fuego, las 3 filas de arriba de la caja.
+  torch(p) {
+    paintTorch(p, 6, [7, 8]);
+    // Un resplandor suave alrededor del fuego (solo se ve en el ícono).
+    for (const x of [6, 9]) {
+      p.set(x, 6, [255, 214, 120, 110]);
+      p.set(x, 7, [255, 180, 80, 70]);
+    }
+  },
+
+  // Contra la pared la caja va más arriba (filas 2 a 11) y se ve de todo
+  // el ancho según el costado: todas las columnas iguales.
+  torch_wall(p) {
+    paintTorch(p, 2, Array.from({ length: S }, (_, i) => i));
+  },
+
+  // Arriba: la punta del fuego.
+  torch_top(p) {
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) p.set(x, y, p.vary([255, 206, 96], 10));
   },
 
   planks(p) {

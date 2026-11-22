@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { getBlockGeometry } from './blockGeometry.js';
+import { aoOnlyShader, itemLightShader } from './materials.js';
 
 const REST = new THREE.Vector3(0.56, -0.5, -0.95); // posición respecto de la cámara
 const SWING_TIME = 0.25;
@@ -14,13 +15,18 @@ export class HeldItem {
    */
   constructor(camera, blockMaterials) {
     // Copias de los materiales que se dibujan siempre por encima del mundo
-    // (sin prueba de profundidad ni niebla) y después del agua.
+    // (sin prueba de profundidad ni niebla) y después del agua, con la luz
+    // del lugar donde está el jugador (en una cueva oscura, oscuro).
+    /** Luz del lugar (cielo y bloques, de 0 a 1): ver setLight. */
+    this.light = new THREE.Vector2(1, 0);
+    const itemLight = itemLightShader({ value: this.light });
     this.materials = blockMaterials.map((m) => {
       const c = m.clone();
       c.depthTest = false;
       c.depthWrite = false;
       c.fog = false;
       c.transparent = true;
+      c.onBeforeCompile = c.isMeshBasicMaterial ? aoOnlyShader : itemLight;
       return c;
     });
     this.mesh = new THREE.Mesh(new THREE.BufferGeometry(), this.materials);
@@ -37,6 +43,15 @@ export class HeldItem {
 
   setBlock(id) {
     this.mesh.geometry = getBlockGeometry(id);
+  }
+
+  /**
+   * Luz del lugar donde está el jugador.
+   * @param {number} sky luz del cielo, de 0 a 1
+   * @param {number} block luz de antorchas y lámparas, de 0 a 1
+   */
+  setLight(sky, block) {
+    this.light.set(sky, block);
   }
 
   setVisible(visible) {

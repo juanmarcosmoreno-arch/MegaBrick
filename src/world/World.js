@@ -13,8 +13,9 @@
 
 import * as THREE from 'three';
 import { BLOCK, BLOCKS, getBlock } from './blocks.js';
-import { CHUNK_HEIGHT, CHUNK_SIZE, Chunk } from './Chunk.js';
-import { WATER_SURFACE, buildChunkMesh, padChunk } from './Mesher.js';
+import { CHUNK_HEIGHT, CHUNK_SIZE, CHUNK_VOLUME, Chunk } from './Chunk.js';
+import { WATER_SURFACE, meshRegion } from './Mesher.js';
+import { REGION_SIZE, changesLight, fillRegion } from './Light.js';
 
 /** Clave de un chunk en el Map: "cx,cz". */
 export function chunkKey(cx, cz) {
@@ -216,8 +217,15 @@ export class World {
     const lx = toLocalCoord(x);
     const lz = toLocalCoord(z);
     const chunk = this.getChunk(cx, cz);
-    if (!chunk || !chunk.set(lx, y, lz, id)) return false;
+    if (!chunk) return false;
+    const old = chunk.get(lx, y, lz);
+    if (!chunk.set(lx, y, lz, id)) return false;
 
+    // Si cambia la luz, a los 8 vecinos les llega (una luz llega a 15
+    // bloques): se rearman en los workers.
+    if (changesLight(old, id)) {
+      for (const [dx, dz] of NEIGHBORHOOD) if (dx || dz) this.getChunk(cx + dx, cz + dz)?.touchLight();
+    }
     // Vecinos que tocan el bloque (sus caras y la oclusión de sus esquinas).
     const sx = lx === 0 ? -1 : lx === CHUNK_SIZE - 1 ? 1 : 0;
     const sz = lz === 0 ? -1 : lz === CHUNK_SIZE - 1 ? 1 : 0;
@@ -271,7 +279,8 @@ export class World {
     if (loaded) {
       for (const [dx, dz] of NEIGHBORHOOD) {
         const chunk = this.getChunk(cx + dx, cz + dz);
-        if (!chunk?.dirty || !chunk.mesh) continue;
+        // Los que solo cambian de luz quedan para los workers.
+        if (!chunk?.dirty || !chunk.mesh || chunk.lightOnly) continue;
         if (this._batch) this._batch.add(chunk);
         else if (this._neighborsReady(chunk.cx, chunk.cz)) this.rebuildChunk(chunk);
       }
@@ -297,7 +306,7 @@ export class World {
       const chunks = this._batch;
       this._batch = null;
       for (const chunk of chunks) {
-        if (chunk.dirty && chunk.mesh && this.chunks.get(chunkKey(chunk.cx, chunk.cz)) === chunk && this._neighborsReady(chunk.cx, chunk.cz)) {
+        if (chunk.dirty && !chunk.lightOnly && chunk.mesh && this.chunks.get(chunkKey(chunk.cx, chunk.cz)) === chunk && this._neighborsReady(chunk.cx, chunk.cz)) {
           this.rebuildChunk(chunk);
         }
       }
@@ -427,26 +436,43 @@ export class World {
     return true;
   }
 
-  /** Datos de los 8 vecinos de un chunk, como los pide el mesher. */
-  _neighborData(cx, cz) {
-    const data = (dx, dz) => this.getChunk(cx + dx, cz + dz)?.data;
-    return {
-      nx: data(-1, 0),
-      px: data(1, 0),
-      nz: data(0, -1),
-      pz: data(0, 1),
-      nxnz: data(-1, -1),
-      pxnz: data(1, -1),
-      nxpz: data(-1, 1),
-      pxpz: data(1, 1),
-    };
+  /**
+   * Copia los 9 chunks de alrededor de `chunk` en `out` (lo que necesita el
+   * mallado, con la luz: ver Light.js). Devuelve la altura del bloque más
+   * alto de los 9.
+   */
+  _fillRegion(chunk, out) {
+    let top = 0;
+    for (const [dx, dz] of NEIGHBORHOOD) {
+      const n = this.getChunk(chunk.cx + dx, chunk.cz + dz);
+      if (n && n.maxY > top) top = n.maxY;
+    }
+    fillRegion((dx, dz) => this.getChunk(chunk.cx + dx, chunk.cz + dz)?.data, top, out);
+    return top;
   }
 
   /** Rearma ya mismo (en este hilo) la malla de un chunk. */
   rebuildChunk(chunk) {
-    const d = buildChunkMesh(chunk.data, this._neighborData(chunk.cx, chunk.cz), chunk.maxY);
+    this._region ??= new Uint16Array(REGION_SIZE);
+    const top = this._fillRegion(chunk, this._region);
+    const light = chunk.light ?? new Uint8Array(CHUNK_VOLUME);
+    const d = meshRegion(this._region, chunk.maxY, top, light);
+    chunk.light = light;
     chunk.dirty = false;
+    chunk.lightOnly = false;
     this._setMesh(chunk, d, chunk.version);
+  }
+
+  /**
+   * Luz en (x, y, z): cielo en los 4 bits de arriba y bloques en los de
+   * abajo (ver Light.packChunkLight), o -1 si no se sabe (chunk sin malla).
+   */
+  lightAt(x, y, z) {
+    if (y >= CHUNK_HEIGHT) return 0xf0;
+    if (y < 0) return 0;
+    const chunk = this.getChunk(toChunkCoord(x), toChunkCoord(z));
+    if (!chunk?.light) return -1;
+    return chunk.light[Chunk.index(toLocalCoord(x), y, toLocalCoord(z))];
   }
 
   /**
@@ -598,23 +624,25 @@ export class World {
     });
   }
 
-  /** Encarga a un worker la malla de un chunk (el hilo principal arma la copia con borde). */
+  /** Encarga a un worker la malla de un chunk (el hilo principal copia la región). */
   _meshInWorker(chunk) {
-    const padded = padChunk(chunk.data, this._neighborData(chunk.cx, chunk.cz), this.workers.takeBuffer());
+    const region = this.workers.takeBuffer();
+    const top = this._fillRegion(chunk, region);
     const version = chunk.version;
     chunk.dirty = false;
+    chunk.lightOnly = false;
     chunk.meshing = true;
-    this.workers.run({ type: 'mesh', padded, maxY: chunk.maxY }, [padded.buffer], (result) => {
+    this.workers.run({ type: 'mesh', region, maxY: chunk.maxY, top }, [region.buffer], (result) => {
       chunk.meshing = false;
       if (!result) {
         chunk.dirty = true; // se rearma de otra forma
         return;
       }
-      this.workers.giveBuffer(result.padded);
+      this.workers.giveBuffer(result.region);
       if (this._disposed) return;
       this._pump();
       if (this.getChunk(chunk.cx, chunk.cz) !== chunk) return; // se descargó
-      this._readyMeshes.push({ chunk, version, mesh: result.mesh });
+      this._readyMeshes.push({ chunk, version, mesh: result.mesh, light: result.light });
     });
   }
 
@@ -636,7 +664,7 @@ export class World {
     let added = 0;
     while (this._readyMeshes.length && added < MAX_NEW_MESHES_PER_FRAME) {
       if (added > 0 && performance.now() - start > NEW_MESHES_BUDGET_MS) break;
-      const { chunk, version, mesh } = this._readyMeshes.shift();
+      const { chunk, version, mesh, light } = this._readyMeshes.shift();
       if (this.getChunk(chunk.cx, chunk.cz) !== chunk || version <= chunk.meshVersion) continue;
       const c = this._center;
       if (c && Math.hypot(chunk.cx - c.cx, chunk.cz - c.cz) > this.meshLimit) {
@@ -644,6 +672,7 @@ export class World {
         continue;
       }
       this._setMesh(chunk, mesh, version);
+      chunk.light = light;
       added++;
     }
   }

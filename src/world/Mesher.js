@@ -14,6 +14,12 @@
 // cuántos bloques sólidos la rodean (los rincones y la base de las paredes
 // quedan en penumbra), y eso se guarda en el color del vértice.
 //
+// Luz (etapa 15): cada vértice lleva también la luz del cielo y la de las
+// antorchas y lámparas (ver Light.js), promediada entre las celdas que
+// rodean la esquina (como la oclusión), así se ve suave. Color del vértice:
+// rojo = oclusión, verde = luz del cielo, azul = luz de los bloques; el
+// shader de los materiales (render/materials.js) los combina con la hora.
+//
 // Los bloques con forma (losas, escalones, puertas) se dibujan con sus cajas:
 // cada caja con sus 6 caras y la textura recortada a su tamaño (no estirada).
 // Los cercos y paneles, con las cajas que corresponden a sus vecinos; las
@@ -23,6 +29,7 @@ import { BLOCK, BLOCKS, LAYER, MAX_BLOCK_IDS, SHAPE } from './blocks.js';
 import { connectedBoxes, isConnected, maskOf } from './shapes.js';
 import { CHUNK_HEIGHT, CHUNK_SIZE } from './Chunk.js';
 import { tileUV } from '../render/atlasLayout.js';
+import { MAX_LIGHT, PAD_LIGHT_SIZE, computeLight, packChunkLight, padFromRegion } from './Light.js';
 
 // Altura de la superficie del agua cuando no tiene agua arriba (un poco más
 // baja que un bloque entero, para que se note el nivel).
@@ -208,6 +215,15 @@ const PAD_H = CHUNK_HEIGHT + 2; // y de -1 a 128
 export const PADDED_SIZE = PAD_AREA * PAD_H;
 /** Copia que usa el mallado en este hilo (buildChunkMesh). */
 const padded = new Uint16Array(PADDED_SIZE);
+/** Luz del cielo y de los bloques de la copia con borde (ver Light.js). */
+const padSky = new Uint8Array(PAD_LIGHT_SIZE);
+const padBlock = new Uint8Array(PAD_LIGHT_SIZE);
+/** Luz plena de cielo y nada de bloques (para los bloques sueltos, como el de la mano). */
+const FULL_SKY = new Uint8Array(PAD_LIGHT_SIZE).fill(MAX_LIGHT);
+const NO_LIGHT = new Uint8Array(PAD_LIGHT_SIZE);
+/** Luz que usa el mallado en curso. */
+let SKY = FULL_SKY;
+let BLK = NO_LIGHT;
 /** Índice en la copia con borde de (x, y, z) locales (de -1 a 16 / 128). */
 const padIndex = (x, y, z) => x + 1 + (z + 1) * PAD_W + (y + 1) * PAD_AREA;
 /** Desplazamiento en la copia para moverse (dx, dy, dz). */
@@ -285,6 +301,8 @@ class LayerBuffer {
     this.normals = new Float32Array(4096 * 3);
     this.uvs = new Float32Array(4096 * 2);
     this.light = new Float32Array(4096); // oclusión de cada vértice
+    this.sky = new Float32Array(4096); // luz del cielo de cada vértice (0 a 15)
+    this.blk = new Float32Array(4096); // luz de los bloques de cada vértice
     this.flip = new Uint8Array(1024); // por cara: dividir por la otra diagonal
     this.vertexCount = 0;
   }
@@ -302,6 +320,8 @@ class LayerBuffer {
     this.normals = grow(this.normals, 3);
     this.uvs = grow(this.uvs, 2);
     this.light = grow(this.light, 1);
+    this.sky = grow(this.sky, 1);
+    this.blk = grow(this.blk, 1);
     this.flip = grow(this.flip, 0.25);
   }
 }
@@ -323,6 +343,8 @@ function emitFace(buf, pad, f, id, x, y, z, pi, box, uvTable = FACE_UVS, uvStart
   const N = buf.normals;
   const T = buf.uvs;
   const L = buf.light;
+  const LS = buf.sky;
+  const LB = buf.blk;
   const quad = buf.vertexCount >> 2;
   const axis = f >> 1; // 0 x, 1 y, 2 z (FACES va de a pares por eje)
   const onEdge = f & 1 ? box[axis + 3] === 1 : box[axis] === 0;
@@ -340,6 +362,9 @@ function emitFace(buf, pad, f, id, x, y, z, pi, box, uvTable = FACE_UVS, uvStart
   const uFlip = UV_AXES[f * 4 + 1] ^ FLIP_U[id * 6 + f];
   const va = UV_AXES[f * 4 + 2];
   const vFlip = UV_AXES[f * 4 + 3];
+  // La celda de donde toma la luz: la de enfrente de la cara (o la del
+  // mismo bloque, para las caras de adentro de una losa o una planta).
+  const front = onEdge ? pi + FACE_OFFSET[f] : pi;
   for (let c = 0; c < 4; c++) {
     const k = f * 12 + c * 3;
     const v = buf.vertexCount++;
@@ -358,14 +383,41 @@ function emitFace(buf, pad, f, id, x, y, z, pi, box, uvTable = FACE_UVS, uvStart
     T[v * 2] = u0 + du * (uFlip ? 1 - pu : pu);
     T[v * 2 + 1] = v0 + dv * (vFlip ? 1 - pv : pv);
     let ao = 3;
+    let ls = SKY[front];
+    let lb = BLK[front];
     if (shade) {
       const o = aoBase + c * 3;
       // Los desplazamientos ya incluyen el paso hacia afuera de la cara.
-      const s1 = OPAQUE[pad[pi + AO_OFFSETS[o]]];
-      const s2 = OPAQUE[pad[pi + AO_OFFSETS[o + 1]]];
-      ao = s1 && s2 ? 0 : 3 - s1 - s2 - OPAQUE[pad[pi + AO_OFFSETS[o + 2]]];
+      const i1 = pi + AO_OFFSETS[o];
+      const i2 = pi + AO_OFFSETS[o + 1];
+      const i3 = pi + AO_OFFSETS[o + 2];
+      const s1 = OPAQUE[pad[i1]];
+      const s2 = OPAQUE[pad[i2]];
+      const s3 = OPAQUE[pad[i3]];
+      ao = s1 && s2 ? 0 : 3 - s1 - s2 - s3;
+      // Luz suave: promedio de las celdas libres alrededor de la esquina.
+      let n = 1;
+      if (!s1) {
+        ls += SKY[i1];
+        lb += BLK[i1];
+        n++;
+      }
+      if (!s2) {
+        ls += SKY[i2];
+        lb += BLK[i2];
+        n++;
+      }
+      if (!s3 && !(s1 && s2)) {
+        ls += SKY[i3];
+        lb += BLK[i3];
+        n++;
+      }
+      ls /= n;
+      lb /= n;
     }
     L[v] = ao;
+    LS[v] = ls;
+    LB[v] = lb;
   }
   // El cuadrado se divide en dos triángulos por la diagonal 1-2. Si la otra
   // (0-3) une las esquinas más claras, se usa esa: así la sombra queda en su
@@ -388,7 +440,9 @@ const PLANT_PLANES = [
  * los dos lados (el material recortado dibuja solo el frente). Sin sombra
  * y con la normal hacia arriba, así se ilumina pareja de cualquier lado.
  */
-function emitPlant(buf, id, x, y, z) {
+function emitPlant(buf, id, x, y, z, pi) {
+  const ls = SKY[pi];
+  const lb = BLK[pi];
   const uvBase = id * 24; // la textura de costado
   const u0 = FACE_UVS[uvBase];
   const v0 = FACE_UVS[uvBase + 1];
@@ -417,6 +471,8 @@ function emitPlant(buf, id, x, y, z) {
         buf.uvs[k * 2] = u;
         buf.uvs[k * 2 + 1] = v;
         buf.light[k] = 1;
+        buf.sky[k] = ls;
+        buf.blk[k] = lb;
       }
       buf.flip[quad] = 0;
     }
@@ -459,16 +515,36 @@ function faceVisible(id, n) {
  * @returns {ChunkMeshData | null} null si el chunk no tiene ninguna cara visible.
  */
 export function buildChunkMesh(data, neighbors = {}, maxY = CHUNK_HEIGHT - 1) {
-  return meshPadded(padChunk(data, neighbors, padded), maxY);
+  return meshPadded(padChunk(data, neighbors, padded), maxY, FULL_SKY, NO_LIGHT);
+}
+
+/**
+ * Arma la malla de un chunk desde la región de 9 chunks (ver
+ * Light.fillRegion), con su luz.
+ * @param {Uint16Array} region
+ * @param {number} maxY bloque no-aire más alto del chunk del medio
+ * @param {number} top bloque no-aire más alto de los 9 chunks
+ * @param {Uint8Array} [lightOut] si se pasa, la luz del chunk (ver Light.packChunkLight)
+ * @returns {ChunkMeshData | null}
+ */
+export function meshRegion(region, maxY, top, lightOut) {
+  padFromRegion(region, top, padded, BLOCK.BEDROCK);
+  computeLight(region, top, padSky, padBlock);
+  if (lightOut) packChunkLight(padSky, padBlock, lightOut);
+  return meshPadded(padded, maxY, padSky, padBlock);
 }
 
 /**
  * Arma los datos de malla desde la copia con borde (ver padChunk).
  * @param {Uint16Array} pad
- * @param {number} [maxY] bloque no-aire más alto del chunk (optimización)
+ * @param {number} maxY bloque no-aire más alto del chunk (optimización)
+ * @param {Uint8Array} sky luz del cielo de la copia con borde
+ * @param {Uint8Array} blk luz de los bloques de la copia con borde
  * @returns {ChunkMeshData | null}
  */
-export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
+function meshPadded(pad, maxY, sky, blk) {
+  SKY = sky;
+  BLK = blk;
   for (const l of LAYERS) l.vertexCount = 0;
   const waterBox = new Float32Array([0, 0, 0, 1, WATER_SURFACE, 1]);
   const shifted = new Float32Array(6);
@@ -511,7 +587,7 @@ export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
           boxes = CONNECTED_BOXES[id][maskOf(id, neighbor[4], neighbor[1], neighbor[5], neighbor[0])];
         }
         if (PLANT[id]) {
-          emitPlant(buf, id, x, y, z);
+          emitPlant(buf, id, x, y, z, pi);
         } else if (boxes) {
           // Con forma: cada caja entera, salvo las caras pegadas a un bloque
           // opaco del costado.
@@ -577,10 +653,9 @@ export function meshPadded(pad, maxY = CHUNK_HEIGHT - 1) {
     normals.set(l.normals.subarray(0, l.vertexCount * 3), v * 3);
     uvs.set(l.uvs.subarray(0, l.vertexCount * 2), v * 2);
     for (let k = 0; k < l.vertexCount; k++) {
-      const light = l.light[k];
-      colors[(v + k) * 3] = light;
-      colors[(v + k) * 3 + 1] = light;
-      colors[(v + k) * 3 + 2] = light;
+      colors[(v + k) * 3] = l.light[k];
+      colors[(v + k) * 3 + 1] = l.sky[k] / MAX_LIGHT;
+      colors[(v + k) * 3 + 2] = l.blk[k] / MAX_LIGHT;
     }
     const start = i;
     for (let q = 0; q < l.vertexCount; q += 4) {

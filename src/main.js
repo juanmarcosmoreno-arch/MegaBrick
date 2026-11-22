@@ -769,6 +769,36 @@ class Game {
   }
 
   /** Ubica y anima el personaje según el estado del jugador. */
+  /**
+   * Luz del lugar para lo que no es parte del mundo (la mano, los
+   * personajes): la de la celda en (x, y, z), suavizada en `state` (un
+   * {sky, block} que se va acercando de a poco). Mientras no se sabe (chunk
+   * sin malla), queda la anterior.
+   */
+  _smoothLight(state, x, y, z, dt) {
+    const l = this.world.lightAt(Math.floor(x), Math.floor(y), Math.floor(z));
+    if (l < 0) return state;
+    const k = dt > 0 ? 1 - Math.exp(-8 * dt) : 1;
+    state.sky += ((l >> 4) / 15 - state.sky) * k;
+    state.block += ((l & 15) / 15 - state.block) * k;
+    return state;
+  }
+
+  /** La luz de la mano, del personaje propio y de los otros jugadores. */
+  updateEntityLight(dt) {
+    const p = this.player.position;
+    this._eyeLight ??= { sky: 1, block: 0 };
+    const eye = this._smoothLight(this._eyeLight, p.x, p.y + 1.62, p.z, dt);
+    this.heldItem.setLight(eye.sky, eye.block);
+    this.avatar.setLight(eye.sky, eye.block);
+    for (const r of this.multiplayer?.players.values() ?? []) {
+      const q = r.avatar.root.position;
+      r._light ??= { sky: 1, block: 0 };
+      const l = this._smoothLight(r._light, q.x, q.y + 1, q.z, dt);
+      r.avatar.setLight(l.sky, l.block);
+    }
+  }
+
   updateAvatar(dt) {
     const p = this.player;
     const a = this.avatar;
@@ -940,6 +970,7 @@ class Game {
       // Primero la cámara: decide si hay lugar para mostrar al personaje.
       this.view.update(this.player, this.world);
       this.updateAvatar(dt);
+      this.updateEntityLight(dt);
       // De frente la mira no marcaría el bloque apuntado: se oculta.
       this.hud.crosshair.hidden = this.view.mode === VIEW.FRONT && this.view.showsAvatar;
       // El bloque en la mano se ve solo cuando no se ve al personaje.

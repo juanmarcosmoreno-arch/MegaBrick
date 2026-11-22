@@ -7,12 +7,12 @@
 // Si un worker falla, el grupo queda "roto" y World vuelve a generar y
 // mallar en el hilo principal (más lento, pero el juego sigue andando).
 
-import { PADDED_SIZE } from './Mesher.js';
+import { REGION_SIZE } from './Light.js';
 
 /** Trabajos encargados a la vez por worker. */
 const JOBS_PER_WORKER = 2;
 
-/** Copias con borde guardadas para reusar (cada una, 84 KB). */
+/** Regiones guardadas para reusar (cada una, 576 KB). */
 const MAX_SPARE_BUFFERS = 12;
 
 export class ChunkWorkers {
@@ -63,14 +63,14 @@ export class ChunkWorkers {
     worker.postMessage({ ...message, id }, transfer);
   }
 
-  /** Una copia con borde para mallar (reusada si hay). */
+  /** Una región para mallar (reusada si hay). */
   takeBuffer() {
-    return this._spare.pop() ?? new Uint16Array(PADDED_SIZE);
+    return this._spare.pop() ?? new Uint16Array(REGION_SIZE);
   }
 
-  /** Devuelve una copia con borde para reusar. */
+  /** Devuelve una región para reusar. */
   giveBuffer(buffer) {
-    if (buffer?.length === PADDED_SIZE && this._spare.length < MAX_SPARE_BUFFERS) this._spare.push(buffer);
+    if (buffer?.length === REGION_SIZE && this._spare.length < MAX_SPARE_BUFFERS) this._spare.push(buffer);
   }
 
   _done(worker, result) {

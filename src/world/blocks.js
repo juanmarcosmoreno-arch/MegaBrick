@@ -61,6 +61,7 @@ export const SHAPE = Object.freeze({
   CARPET: 'carpet', // alfombra: una capa finita sobre el piso
   WIRE: 'wire', // cable: cajitas planas sobre el piso que se unen con los vecinos
   MECHANISM: 'mechanism', // palanca, botón, placa, compuertas, pistón (cajas fijas)
+  TORCH: 'torch', // antorcha: un palito en el piso o contra la pared
 });
 
 /**
@@ -135,6 +136,10 @@ export const CATEGORIES = Object.freeze([
  *   mismo bloque en el otro estado.
  * - attach: [dx, dy, dz] hacia el bloque que lo sostiene (si se rompe ese,
  *   se rompe este: palancas, botones, cables, placas, compuertas).
+ * - light: luz que da, de 0 a 15 (ver world/Light.js). Si no se indica, lo
+ *   que brilla solo (capa GLOW) da 15 y el resto nada.
+ * - places: los IDs para ponerlo en el piso y en cada pared (palanca,
+ *   botón, antorcha): [piso, norte, este, sur, oeste].
  */
 const DEFAULTS = {
   solid: true,
@@ -215,7 +220,7 @@ register(
 );
 register(def(BLOCK.ORE_COPPER, 'Mineral de cobrizo', 'ore_copper', { category: 'natural', hardness: 1.3 }));
 register(def(BLOCK.ORE_AZURITE, 'Mineral de azurita', 'ore_azurite', { category: 'natural', hardness: 1.5 }));
-register(def(BLOCK.ORE_SOLARITE, 'Mineral de solarita', 'ore_solarite', { category: 'natural', hardness: 1.8 }));
+register(def(BLOCK.ORE_SOLARITE, 'Mineral de solarita', 'ore_solarite', { category: 'natural', hardness: 1.8, light: 6 }));
 register(def(BLOCK.PLANKS, 'Tablones', 'planks', { sound: 'wood', category: 'wood' }));
 register(def(BLOCK.STONE_BRICK, 'Ladrillo de piedra', 'stone_brick', { category: 'stone', hardness: 1.2 }));
 register(
@@ -929,6 +934,46 @@ addPiston('PISTON_STICKY', 'Pistón pegajoso', true);
 // ---------------------------------------------------------------------------
 
 add('ORE_COAL', 'Mineral de carbón', 'ore_coal', { category: 'natural', hardness: 1.1 });
+
+// Antorcha: un palito con fuego, en el piso o contra una pared (como la
+// palanca). Brilla sola y da luz 14.
+{
+  const floorBox = [7 / 16, 0, 7 / 16, 9 / 16, 10 / 16, 9 / 16];
+  // Contra la pared de atrás (+Z) mirando al norte, un poco más arriba.
+  const wallBox = [7 / 16, 4 / 16, 14 / 16, 9 / 16, 14 / 16, 1];
+  const common = {
+    solid: false,
+    opaque: false,
+    layer: LAYER.GLOW,
+    sound: 'wood',
+    hardness: 0.05,
+    shape: SHAPE.TORCH,
+    light: 14,
+    icon: 'flat',
+  };
+  const ids = [
+    add('TORCH_0', 'Antorcha', { top: 'torch_top', side: 'torch', bottom: 'torch' }, {
+      ...common,
+      boxes: Object.freeze([Object.freeze(floorBox)]),
+      attach: DOWN,
+      category: 'details',
+    }),
+  ];
+  for (let facing = 0; facing < 4; facing++) {
+    const [dx, , dz] = DIRS6[facing];
+    ids.push(
+      add(`TORCH_${facing + 1}`, 'Antorcha', { top: 'torch_top', side: 'torch_wall', bottom: 'torch_wall' }, {
+        ...common,
+        boxes: Object.freeze([rotateBox(wallBox, facing)]),
+        attach: Object.freeze([-dx, 0, -dz]),
+        facing,
+      }),
+    );
+  }
+  const places = Object.freeze(ids.slice());
+  for (const id of ids) BLOCKS[id] = Object.freeze({ ...BLOCKS[id], item: ids[0], places });
+}
+
 
 Object.freeze(BLOCK);
 

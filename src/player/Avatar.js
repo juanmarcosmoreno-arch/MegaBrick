@@ -50,6 +50,10 @@ export class Avatar {
     this.model = createHumanoid(THREE, getCharacter(this.character), { color: VARIANTS[this.variant].color });
     this.model.root.rotation.y = Math.PI; // de +Z (el modelo) a -Z (el juego)
     this.root.add(this.model.root);
+    // Materiales propios del personaje (para la luz del lugar: ver setLight).
+    this._materials = new Set();
+    this.model.root.traverse((o) => o.material && this._materials.add(o.material));
+    if (this._light) this.setLight(...this._light);
     if (this.heldBlock) this.model.hand.add(this.heldBlock);
     this.model.setExpression(this.baseExpression);
   }
@@ -72,6 +76,22 @@ export class Avatar {
     }
     this.heldBlock.geometry = geometry;
     this.heldBlock.visible = true;
+  }
+
+  /**
+   * Luz del lugar donde está (como la de los bloques, ver
+   * render/materials.js): en una cueva se oscurece y cerca de una antorcha
+   * toma su tono cálido.
+   * @param {number} sky luz del cielo, de 0 a 1
+   * @param {number} block luz de antorchas y lámparas, de 0 a 1
+   */
+  setLight(sky, block) {
+    this._light = [sky, block];
+    const curve = (l) => (l <= 0 ? 0 : 0.8 ** ((1 - l) * 15));
+    const s = curve(sky) + 0.02;
+    const t = 1.2 * curve(block);
+    const clamp = (v) => Math.min(1.3, v);
+    for (const m of this._materials) m.color.setRGB(clamp(s + t), clamp(s + 0.72 * t), clamp(s + 0.42 * t));
   }
 
   /** Golpe con el brazo al romper o poner un bloque. */

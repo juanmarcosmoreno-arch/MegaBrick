@@ -8,7 +8,6 @@
 
 import * as THREE from 'three';
 import { Avatar } from './Avatar.js';
-import { getBlockGeometry } from '../render/blockGeometry.js';
 
 const INTERP_DELAY = 0.15; // segundos
 const MAX_BUFFER = 20;
@@ -113,7 +112,8 @@ export class RemotePlayer {
     // Bloque en la mano y acciones (romper o poner).
     if (state.held !== this.held) {
       this.held = state.held;
-      this.avatar.setHeldBlock(getBlockGeometry(state.held), this.blockMaterials);
+      // 0: la mano vacía (modo aventura).
+      this.avatar.setHeldItem(state.held || null, this.blockMaterials);
     }
     if (this.swing !== null && state.swing !== this.swing) this.avatar.swing();
     this.swing = state.swing;

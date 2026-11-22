@@ -77,6 +77,15 @@ export class BlockInteraction {
     this._afterAnimal = false;
     /** Cuánto falta para romperlo, de 0 a 1 (para las grietas). */
     this.breakProgress = 0;
+    /**
+     * Modo aventura (etapa 15): segundos que tarda en romperse un bloque
+     * (según la herramienta en la mano) y aviso de lo que se rompió (para
+     * juntarlo). Sin esto, la resistencia de siempre.
+     * @type {((block: object) => number) | null}
+     */
+    this.breakTime = null;
+    /** @type {((ids: number[]) => void) | null} */
+    this.onBroken = null;
     this._eye = new THREE.Vector3();
     this._dir = new THREE.Vector3();
   }
@@ -176,8 +185,9 @@ export class BlockInteraction {
       this._hitTimer = HIT_EVERY;
       this.onAction?.('hit', t.id);
     }
-    this.breakProgress = Math.min(1, this._mineTime / block.hardness);
-    if (this._mineTime < block.hardness) return false;
+    const seconds = this.breakTime ? this.breakTime(block) : block.hardness;
+    this.breakProgress = Math.min(1, this._mineTime / seconds);
+    if (this._mineTime < seconds) return false;
     this._stopMining();
     // El ruido de romper hace de golpe: el siguiente, un rato después.
     this._hitTimer = HIT_EVERY;
@@ -204,19 +214,29 @@ export class BlockInteraction {
   breakTarget() {
     const t = this.target;
     if (!t || !getBlock(t.id).breakable) return false;
-    if (!this._clear(t.x, t.y, t.z)) return false;
+    // La otra mitad de una puerta (se va con esta; se junta una sola puerta).
     const partner = doorPartner(this.world, t.x, t.y, t.z, t.id);
+    if (!this._clear(t.x, t.y, t.z)) return false;
     if (partner) this._clear(t.x, partner.y, t.z);
     // Lo que se apoyaba en este bloque se cae con él: una planta arriba, un
     // cable o una palanca, la cabeza de un pistón.
-    this._dropAttached(t.x, t.y, t.z);
+    const broken = [t.id, ...this._dropAttached(t.x, t.y, t.z)];
     this.onAction?.('break', t.id);
+    this.onBroken?.(broken);
     return true;
   }
 
-  /** Rompe lo que estaba sostenido por el bloque (x, y, z), que ya no está. */
+  /**
+   * Rompe lo que estaba sostenido por el bloque (x, y, z), que ya no está.
+   * Devuelve los IDs que se rompieron.
+   */
   _dropAttached(x, y, z) {
-    for (const [nx, ny, nz] of supportedBy(this.world, x, y, z)) this._clear(nx, ny, nz);
+    const ids = [];
+    for (const [nx, ny, nz] of supportedBy(this.world, x, y, z)) {
+      const id = this.world.getBlock(nx, ny, nz);
+      if (this._clear(nx, ny, nz)) ids.push(id);
+    }
+    return ids;
   }
 
   /**
@@ -245,6 +265,7 @@ export class BlockInteraction {
     if (t.normal.every((n) => n === 0) || y < 1 || y >= CHUNK_HEIGHT) return false;
     if (!this._isFree(x, y, z)) return false;
     const item = this.hotbar.selectedBlock;
+    if (item === null) return false; // en la mano no hay un bloque (modo aventura)
     const block = getBlock(item);
     if (block.shape === SHAPE.DOOR) return this._placeDoor(x, y, z, block);
     // Las plantas van sobre tierra (y no adentro del agua).
@@ -256,6 +277,7 @@ export class BlockInteraction {
     if (a && !holds(getBlock(this.world.getBlock(x + a[0], y + a[1], z + a[2])))) return false;
     if (this._intersectsPlayer(x, y, z, id)) return false;
     if (!this.world.editBlock(x, y, z, id)) return false;
+    this.hotbar.useSelected?.();
     this.onAction?.('place', id);
     return true;
   }
@@ -316,6 +338,7 @@ export class BlockInteraction {
     if (this._intersectsPlayer(x, y, z, bottom) || this._intersectsPlayer(x, y + 1, z, top)) return false;
     if (!this.world.editBlock(x, y, z, bottom)) return false;
     this.world.editBlock(x, y + 1, z, top);
+    this.hotbar.useSelected?.();
     this.onAction?.('place', bottom);
     return true;
   }

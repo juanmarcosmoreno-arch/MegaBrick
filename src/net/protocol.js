@@ -10,9 +10,10 @@ import { DEFAULT_VARIANT, EXPRESSIONS, isVariant } from '../player/colors.js';
 import { DEFAULT_CHARACTER, isCharacter } from '../player/characters/index.js';
 import { ACTIONS } from '../animals/Animal.js';
 import { SPECIES_IDS } from '../animals/species/index.js';
+import { isItem } from '../items/items.js';
 
 /** Versión del protocolo: invitado y anfitrión tienen que coincidir. */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** Prefijo de los IDs en el servidor de PeerJS (evita choques con otras apps). */
 const PEER_PREFIX = 'megabrick-v1-';
@@ -120,7 +121,8 @@ export function cleanState(m) {
     speed: Math.max(0, Math.min(50, speed)),
     flying: Boolean(m.flying),
     expr: EXPRESSIONS.includes(m.expr) ? m.expr : 'normal',
-    held: Number.isInteger(m.held) && BLOCKS[m.held]?.tiles ? m.held : BLOCK.GRASS,
+    // Bloque u objeto en la mano (0: nada, en el modo aventura).
+    held: Number.isInteger(m.held) && (m.held === 0 || isItem(m.held) || BLOCKS[m.held]?.tiles) ? m.held : BLOCK.GRASS,
     swing: Number.isInteger(m.swing) ? m.swing : 0,
     color: isVariant(m.color) ? m.color : null,
     character: isCharacter(m.character) ? m.character : null,

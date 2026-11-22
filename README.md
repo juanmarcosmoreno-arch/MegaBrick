@@ -33,6 +33,8 @@ El juego se construye por etapas. Siempre queda una versión jugable.
 | 11 | Resistencia de los materiales: romper tarda distinto según el bloque, con grietas | ✅ |
 | 12 | Más bloques: naturaleza, pino y jacarandá, plantas y flores, hormigón, baldosa calcárea, metales, chapa, vidrios de colores, alfombras, cercos, rejas, paneles de vidrio, tranqueras, escaleras de mano y trampillas | ✅ |
 | 13 | Mecanismos: cable de cobrizo, palanca, botón, placa de presión, lámpara, inversor, retardador, timbre y pistones; puertas, trampillas y tranqueras que se abren con energía | ✅ |
+| 14 | Personajes para elegir: normal, soldado, vikingo, deportista, skater, gaucho, astronauta y bombero, con el color de la ropa | ✅ |
+| 15 | Cuevas y carbón, luz de verdad (cuevas oscuras, antorchas) y modo aventura: mochila, juntar minerales, fabricar herramientas y bloques | ✅ |
 
 ## Requisitos
 
@@ -76,12 +78,12 @@ Ejemplo: `http://localhost:5173/megabrick/?semilla=islas&distancia=8`.
 | **Mouse** | Mirar |
 | **Espacio** | Saltar (mantenido, salta cada vez que toca el piso). En el agua: nadar hacia arriba |
 | **Ctrl** (o doble toque de **W**) | Correr: más rápido y con la vista un poco más abierta |
-| **F** | Activar o desactivar el vuelo |
+| **F** | Activar o desactivar el vuelo (en el modo aventura no se vuela) |
 | **Espacio / Shift** (volando) | Subir / bajar |
 | **Clic izquierdo** | Romper el bloque apuntado: mantenelo apretado; cada material tarda distinto (ver Resistencia). Sobre un animal: empujarlo |
 | **Clic derecho** | Poner el bloque elegido en la cara apuntada. Sobre un animal: acariciarlo |
 | **1 – 9** o **rueda del mouse** | Elegir casilla de la hotbar |
-| **E** | Menú de materiales: elegir qué bloque va en cada casilla (E o Esc lo cierran) |
+| **E** | Creativo: menú de materiales (elegir qué bloque va en cada casilla). Aventura: la mochila y fabricar. E o Esc lo cierran |
 | **V** | Cambiar la cámara: primera persona → tercera persona → de frente |
 | **F3** | Mostrar u ocultar coordenadas, chunk, hacia dónde se mira, la hora, el tiempo por cuadro y más datos |
 | **Esc** | Soltar el mouse y pausar (en la pausa: Opciones, Multijugador, Guardar y salir) |
@@ -100,7 +102,7 @@ También se juega con un joystick de Xbox, de PlayStation o cualquiera que el na
 | **RT / R2** | Romper (mantenido, como el clic izquierdo) |
 | **LT / L2** | Poner el bloque elegido |
 | **LB RB / L1 R1** | Elegir casilla de la hotbar |
-| **Vista / Create** | Menú de materiales (adentro, LB RB cambian de casilla, A pone el material y B vuelve) |
+| **Vista / Create** | Menú de materiales o mochila (adentro, LB RB cambian de casilla, A pone el material, elige o fabrica, y B vuelve) |
 | **X / □** | Cambiar la cámara |
 | **Menú / Options** | Pausa (y en el inicio, Jugar) |
 
@@ -136,7 +138,8 @@ Algunas cosas siguen pidiendo el teclado o el mouse: escribir (nombre de un mund
 - **Escalones:** se ponen mirando hacia donde mirás, con la parte alta del lado de enfrente, así que para hacer una escalera o un techo a dos aguas alcanza con mirar hacia donde sube. Se suben caminando, sin saltar.
 - **Losas:** medio bloque. Van abajo, salvo que apuntes a un techo o a la mitad de arriba de una pared: ahí van arriba. Una losa también se sube caminando (un bloque entero sigue pidiendo saltar).
 - **Puertas:** ocupan dos bloques de alto y se ponen mirando hacia donde mirás, con la bisagra a tu izquierda. Clic derecho (o el gatillo izquierdo del joystick) las abre y las cierra; rotas, se va la puerta entera. Abiertas dejan pasar; cerradas, no.
-- **Faroles:** brillan solos, igual de día que de noche (no iluminan lo de alrededor).
+- **Faroles:** brillan solos, igual de día que de noche, e iluminan lo de alrededor (ver [Luz](#luz)).
+- **Antorchas:** se ponen en el piso o contra la pared apuntada (en el techo, no) y dan una luz cálida. Si sacás el bloque que la sostiene, se cae.
 - **Cercos, rejas y paneles de vidrio:** se unen solos con el de al lado y con los bloques enteros (también el vidrio). Los cercos no se saltan ni se trepan desde el agua (tampoco los animales: sirven de corral).
 - **Tranqueras y trampillas:** se ponen mirando hacia donde mirás y se abren y se cierran con clic derecho, como las puertas. La tranquera abierta deja pasar, y los cercos se unen a ella por sus extremos. La trampilla va abajo en su celda, o arriba (para tapar un hueco del piso) si apuntás a un techo o a la mitad de arriba de una cara; cerrada se pisa, y abierta deja pasar; con una escalera de mano abajo, se trepa (para salir de un pozo).
 - **Escaleras de mano:** se ponen contra la pared apuntada. Para subir, avanzá o apretá Espacio; para bajar, Shift; si no tocás nada, te quedás agarrado.
@@ -207,9 +210,49 @@ El mundo es infinito y se genera a medida que te movés, en chunks de 16 × 16 b
 - **Árboles:** se agrupan en bosques y también aparecen sueltos. En las alturas son pinos, y en el llano a veces hay jacarandás en flor. Sus copas pasan de un chunk a otro sin cortarse.
 - **Plantas:** pasto alto suelto, flores (margaritas, ceibos y flores celestes) por manchones, y en el bosque helechos y algún hongo. Las cumbres más altas tienen nieve.
 - **Mundos de antes:** cada mundo recuerda con qué versión del generador se creó. Los guardados antes de la etapa 12 se siguen generando igual que siempre (solo con los árboles de antes, sin plantas ni nieve), así lo que construiste o sacaste queda como estaba; los nuevos traen todo lo nuevo.
-- **Minerales:** cobrizo, azurita y solarita aparecen en vetas dentro de la piedra. Cuanto más raro el mineral, más hondo.
+- **Minerales:** carbón, cobrizo, azurita y solarita aparecen en vetas dentro de la piedra. El carbón es el más común; cuanto más raro el mineral, más hondo. La solarita brilla un poco en la oscuridad.
+- **Cuevas:** túneles largos que serpentean (a veces salen a la superficie: son las entradas) y cavernas grandes en lo hondo, con los minerales a la vista en las paredes. Bajo el mar dejan un techo de piedra, así el agua nunca queda colgando sobre un hueco. Los mundos creados antes de la etapa 15 no tienen cuevas (se siguen generando igual).
 - **Carga de chunks:** se generan y mallan en segundo plano (ver [Rendimiento](#rendimiento)), primero los más cercanos al jugador y los que tiene adelante. Los lejanos se liberan de la memoria.
 - **Niebla:** tiene el color del horizonte (cambia con la hora) y tapa el borde del área cargada.
+
+## Luz
+
+Cada lugar del mundo tiene luz de 0 a 15, de dos clases:
+
+- **Del cielo:** baja derecho por donde no hay techo y se desparrama, perdiendo un poco por bloque, así entra apenas en las cuevas y bajo los techos. Cuánto ilumina depende de la hora: de noche, la luz del cielo es la de la luna.
+- **De los bloques:** antorchas (14), faroles y lámparas prendidas (15) y la solarita (6). Ilumina igual de día y de noche, con un tono cálido.
+
+Las cuevas sin antorchas quedan casi negras. La luz se suaviza en cada esquina, como la oclusión. El bloque en la mano y los personajes toman la luz del lugar donde están. Se calcula al armar la malla de cada chunk, en los workers, mirando los 8 chunks de alrededor (una luz llega hasta 15 bloques); al poner o sacar algo que la cambia, se rearman también los vecinos.
+
+## Modo aventura
+
+Al crear un mundo se elige el modo: **Aventura** (el que viene marcado) o **Creativo**. Los mundos de antes de la etapa 15 son creativos.
+
+- **Mochila (E):** 36 casillas; las 9 de abajo son la hotbar. Un clic en una casilla y otro en otra la mueve (si tienen lo mismo, se junta; si no, se intercambian). Con el mouse sobre una casilla, las teclas 1 a 9 la cambian por esa casilla de la hotbar. Entran hasta 64 de cada cosa por casilla (las herramientas, de a una).
+- **Juntar:** lo que rompés va directo a la mochila. El césped da tierra, la piedra da empedrado y los minerales dan **carbón**, **cobrizo**, **azurita** y **solarita**. El follaje a veces suelta un palo; el pasto alto y los helechos no dan nada. Si la mochila está llena, avisa.
+- **Herramientas:** picos, hachas y palas de madera, piedra, cobrizo y azurita. Cada una rompe más rápido lo suyo (el pico la piedra, el hacha la madera, la pala la tierra y la arena) y mejor cuanto mejor el material. La piedra a mano tarda muchísimo y no da nada: hace falta un pico. El carbón sale con uno de madera, el cobrizo pide uno de piedra y la azurita y la solarita, uno de cobrizo.
+- **Fabricar:** en la mochila, a la derecha, están las recetas para las que tenés algo, primero las que alcanzan. Un clic fabrica una vez. Se fabrican desde la mochila, sin mesa de trabajo:
+
+  | Da | Con |
+  |---|---|
+  | 4 tablones | 1 tronco (cada madera, los suyos) |
+  | 4 palos | 2 tablones |
+  | Pico o hacha | 3 tablones, empedrado, cobrizo o azurita + 2 palos |
+  | Pala | 1 tablón, empedrado, cobrizo o azurita + 2 palos |
+  | 4 antorchas | 1 carbón + 1 palo |
+  | Farol | 1 solarita + 2 vidrios |
+  | 2 vidrios | 2 arena + 1 carbón |
+  | 4 ladrillos de piedra / 2 piedra lisa | 4 empedrado / 2 empedrado + 1 carbón |
+  | Bloques de cobrizo, azurita y solarita | 9 del mineral (y de vuelta) |
+  | Puerta, trampillas, cercos, tranquera, escalera de mano, ventana, biblioteca | Tablones, palos y vidrio |
+  | Cable (8), palanca, botón, placa, lámpara, inversor, retardador, timbre, pistones | Cobrizo, empedrado, palos, solarita y vidrio |
+  | Escalones (4) y losas (6) | 6 y 3 del material |
+
+  El carbón hace de horno: con él se cocinan el vidrio, los ladrillos y la piedra lisa.
+- **Poner:** cada bloque que ponés se gasta de la mochila. Con una herramienta o un mineral en la mano no se pone nada.
+- **Sin vuelo:** en el modo aventura no se vuela. Tampoco hay vida ni hambre: nadie se lastima.
+- **Se guarda:** el modo y la mochila se guardan con el mundo. En **Mis mundos** los de aventura dicen "Aventura".
+- **Multijugador:** la partida tiene el modo del mundo del anfitrión; cada uno junta y fabrica en su propia mochila (la de un invitado empieza vacía y no se guarda). Cada uno ve lo que el otro tiene en la mano.
 
 ## Animales
 
@@ -271,8 +314,14 @@ src/
     ChunkWorkers.js     → grupo de Web Workers: reparte los trabajos y avisa cuando terminan
     chunkWorker.js      → el worker: genera chunks y arma sus mallas
     collision.js        → choques de una caja contra los bloques (el jugador y los animales)
-    Mesher.js           → una malla por chunk con solo las caras visibles y oclusión por vértice (sin DOM: corre en los workers)
-    TerrainGen.js       → terreno procedural con semilla: alturas, capas, agua, árboles y minerales
+    Mesher.js           → una malla por chunk con solo las caras visibles, oclusión y luz por vértice (sin DOM: corre en los workers)
+    TerrainGen.js       → terreno procedural con semilla: alturas, capas, agua, cuevas, árboles y minerales
+    Light.js            → luz del cielo y de los bloques (0 a 15), con los 9 chunks de alrededor
+  items/
+    items.js            → objetos del modo aventura (minerales, palo, herramientas): qué da cada bloque y cuánto tarda
+    recipes.js          → recetas para fabricar desde la mochila
+    Backpack.js         → la mochila: 36 casillas con lo que se juntó
+    itemIcons.js        → íconos de los objetos en pixel art, dibujados por código
   animals/
     Animals.js          → los animales del mundo: aparecen y se van, los corazones, la red
     Animal.js           → un animal: su cuerpo (choques, salto, nado) y lo que hace (pasear, pastar, escapar, seguir)
@@ -291,17 +340,19 @@ src/
   render/
     atlasLayout.js      → ubicación de cada textura en el atlas (sin DOM, apto para workers)
     textures.js         → dibujo procedural del atlas (pixel art 16×16)
-    materials.js        → materiales por capa: opaca, recortada (hojas/vidrio) y translúcida (agua)
+    materials.js        → materiales por capa (opaca, recortada, translúcida y la que brilla) y la luz en el shader
     Sky.js              → día y noche: cielo en degradé, sol, luna, estrellas, luces y niebla
     CharacterPreview.js → personaje girando en la pantalla de inicio
     BlockOutline.js     → contorno del bloque apuntado
-    HeldItem.js         → bloque en la mano en primera persona
+    HeldItem.js         → bloque u objeto en la mano en primera persona
+    itemMesh.js         → objetos planos en la mano (herramientas, minerales)
     blockGeometry.js    → geometría de un bloque suelto
     blockIcons.js       → íconos isométricos de los bloques (con su forma) para la hotbar y el menú
   ui/
     Hud.js              → mira, FPS, avisos y datos de F3
-    Hotbar.js           → las 9 casillas de bloques
-    Inventory.js        → menú de materiales (tecla E): todos los bloques por grupos
+    Hotbar.js           → las 9 casillas de bloques (en aventura, las de la mochila con cuántos hay)
+    Inventory.js        → menú de materiales (tecla E, creativo): todos los bloques por grupos
+    BackpackMenu.js     → mochila del modo aventura (tecla E): mover casillas y fabricar
     Menu.js             → pantalla de inicio (con selector de color) y menú de pausa
     MultiplayerMenu.js  → panel de multijugador, lista de jugadores y datos en la pausa
     WorldsMenu.js       → Continuar/Jugar, nuevo mundo, lista de mundos (jugar y borrar) y estado del guardado
@@ -372,8 +423,10 @@ src/
 | 282 – 297 | Inversor y retardador | 8 IDs cada uno: 4 orientaciones, salida apagada o prendida |
 | 298 – 299 | Timbre | |
 | 300 – 335 | Pistón y pistón pegajoso | 18 IDs cada uno: 6 direcciones, recogido o estirado, y la cabeza |
+| 336 | Mineral de carbón | Vetas negras, el más común |
+| 337 – 341 | Antorcha | En el piso o en cada pared |
 
-Cada escalón usa 4 IDs (uno por orientación) y cada losa 2 (abajo y arriba): en la hotbar y en el menú se ve uno solo, y al ponerlo se elige el que corresponde. Los IDs se guardan en los mundos, así que los bloques nuevos se agregan siempre al final. Los chunks guardan IDs de 16 bits: hay lugar para 1024 tipos de bloque.
+Cada escalón usa 4 IDs (uno por orientación) y cada losa 2 (abajo y arriba): en la hotbar y en el menú se ve uno solo, y al ponerlo se elige el que corresponde. Los IDs se guardan en los mundos, así que los bloques nuevos se agregan siempre al final. Los chunks guardan IDs de 16 bits: hay lugar para 1024 tipos de bloque. Los objetos que no son bloques (minerales, palo y herramientas) usan IDs desde 1024 (ver `src/items/items.js`).
 
 Para agregar un bloque se suma una línea en `src/world/blocks.js` (con `add`, o `addMaterial` si lleva escalones y losas) y, si necesita una textura nueva, su nombre en `src/render/atlasLayout.js` y su pintor en `src/render/textures.js` o en un archivo de `src/render/tiles/`. Las formas se describen con cajas (`boxes`): con ellas se dibuja, se choca y se apunta.
 

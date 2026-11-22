@@ -1,9 +1,14 @@
 // Hotbar: 9 casillas con bloques para construir, abajo en la pantalla.
 // Se elige con las teclas 1-9 o con la rueda del mouse; qué bloque va en
 // cada casilla se cambia en el menú de materiales (tecla E).
+//
+// En el modo aventura (etapa 15) muestra las primeras 9 casillas de la
+// mochila, con cuántos hay de cada cosa (y puede haber herramientas o
+// minerales, que no se ponen).
 
 import { BLOCK, getBlock } from '../world/blocks.js';
-import { getBlockIcon } from '../render/blockIcons.js';
+import { getItemIcon } from '../items/itemIcons.js';
+import { isBlockItem, itemName } from '../items/items.js';
 
 export const HOTBAR_SIZE = 9;
 
@@ -34,7 +39,9 @@ export class Hotbar {
     this.atlas = atlasCanvas;
     this.slots = [...DEFAULT_HOTBAR];
     this.selected = 0;
-    /** Se llama al cambiar de casilla o de bloque: (blockId) => void. */
+    /** Mochila del modo aventura (null: creativo). */
+    this.backpack = null;
+    /** Se llama al cambiar de casilla o de lo que hay en ella: (itemId | null) => void. */
     this.onChange = null;
 
     this.el = document.createElement('div');
@@ -51,7 +58,9 @@ export class Hotbar {
       const num = document.createElement('span');
       num.className = 'hotbar-key';
       num.textContent = String(i + 1);
-      slot.append(img, num);
+      const count = document.createElement('span');
+      count.className = 'hotbar-count';
+      slot.append(img, num, count);
       this.el.appendChild(slot);
       this.slotEls.push(slot);
     }
@@ -60,9 +69,35 @@ export class Hotbar {
     this.render();
   }
 
-  /** ID del bloque de la casilla elegida. */
-  get selectedBlock() {
+  /** Lo que hay en la casilla elegida (bloque u objeto), o null si está vacía. */
+  get selectedItem() {
+    if (this.backpack) return this.backpack.slots[this.selected]?.id ?? null;
     return this.slots[this.selected];
+  }
+
+  /** ID del bloque de la casilla elegida, o null si no hay un bloque para poner. */
+  get selectedBlock() {
+    const id = this.selectedItem;
+    return isBlockItem(id) ? id : null;
+  }
+
+  /** Pasa al modo aventura (con la mochila) o al creativo (null). */
+  setBackpack(backpack) {
+    this.backpack = backpack;
+    this.render();
+    this.onChange?.(this.selectedItem);
+  }
+
+  /** Se gastó uno de la casilla elegida (al poner un bloque en el modo aventura). */
+  useSelected() {
+    if (this.backpack) this.backpack.takeOne(this.selected);
+  }
+
+  /** Muestra un texto un momento arriba de la hotbar (lo que se juntó). */
+  showText(text) {
+    this.nameEl.textContent = text;
+    this.nameEl.classList.add('visible');
+    this._nameTimer = 1.6;
   }
 
   /** Elige una casilla (0 a 8). */
@@ -72,7 +107,7 @@ export class Hotbar {
     this.selected = i;
     this.render();
     this._showName();
-    this.onChange?.(this.selectedBlock);
+    this.onChange?.(this.selectedItem);
   }
 
   /** Avanza o retrocede casillas (rueda del mouse). */
@@ -87,7 +122,7 @@ export class Hotbar {
     this.selected = i;
     this.render();
     this._showName();
-    this.onChange?.(this.selectedBlock);
+    this.onChange?.(this.selectedItem);
   }
 
   /** Cambia el contenido de la hotbar (por ejemplo, al cargar una partida). */
@@ -98,23 +133,25 @@ export class Hotbar {
     }
     this.selected = Math.max(0, Math.min(HOTBAR_SIZE - 1, selected | 0));
     this.render();
-    this.onChange?.(this.selectedBlock);
+    this.onChange?.(this.selectedItem);
   }
 
   render() {
     this.slotEls.forEach((slot, i) => {
-      const id = this.slots[i];
+      const s = this.backpack ? this.backpack.slots[i] : { id: this.slots[i], count: 0 };
       const img = slot.querySelector('img');
-      img.src = getBlockIcon(this.atlas, id);
-      slot.title = getBlock(id).name;
+      img.hidden = !s;
+      if (s) img.src = getItemIcon(this.atlas, s.id);
+      slot.title = s ? itemName(s.id) : '';
+      slot.querySelector('.hotbar-count').textContent = s && s.count > 1 ? String(s.count) : '';
       slot.classList.toggle('selected', i === this.selected);
     });
   }
 
   _showName() {
-    this.nameEl.textContent = getBlock(this.selectedBlock).name;
-    this.nameEl.classList.add('visible');
-    this._nameTimer = 1.6;
+    const id = this.selectedItem;
+    if (id === null) return;
+    this.showText(itemName(id));
   }
 
   /** Se llama una vez por frame (oculta el nombre después de un rato). */

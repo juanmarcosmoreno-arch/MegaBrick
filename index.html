@@ -86,6 +86,17 @@
           <input id="nw-seed" type="text" maxlength="64" placeholder="Al azar" autocomplete="off" spellcheck="false" />
         </label>
         <p class="hint">La misma semilla arma siempre el mismo terreno. Vacía, sale una al azar.</p>
+        <div class="field">
+          <span id="nw-mode-label">Modo</span>
+          <div id="nw-mode" class="mode-picker" role="radiogroup" aria-labelledby="nw-mode-label">
+            <button type="button" class="mode-option" role="radio" data-mode="aventura" aria-checked="true">
+              <strong>Aventura</strong><small>Juntá materiales, fabricá herramientas y bajá a las cuevas.</small>
+            </button>
+            <button type="button" class="mode-option" role="radio" data-mode="creativo" aria-checked="false" tabindex="-1">
+              <strong>Creativo</strong><small>Todos los materiales, sin límite, y se puede volar.</small>
+            </button>
+          </div>
+        </div>
         <div class="dialog-actions">
           <button id="nw-create" class="btn btn-primary" type="button">Crear mundo</button>
           <button id="nw-back" class="btn btn-ghost" type="button">Volver</button>
@@ -178,6 +189,27 @@
         <div id="inv-groups" class="inv-groups"></div>
         <div class="dialog-actions">
           <button id="inv-done" class="btn btn-primary" type="button">Listo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mochila del modo aventura (tecla E) -->
+    <div id="backpack-panel" class="screen overlay" hidden role="dialog" aria-labelledby="bp-title" aria-modal="true">
+      <div class="panel dialog inventory backpack">
+        <h2 id="bp-title">Mochila</h2>
+        <p class="hint">Tocá una casilla y después otra para moverla. Abajo está tu barra (teclas 1 a 9).</p>
+        <div class="bp-body">
+          <div class="bp-left">
+            <div id="bp-slots" class="bp-slots" aria-label="Casillas de la mochila"></div>
+            <p id="bp-name" class="inv-name" aria-live="polite"></p>
+          </div>
+          <div class="bp-right">
+            <h3>Fabricar</h3>
+            <div id="bp-recipes" class="bp-recipes"></div>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button id="bp-done" class="btn btn-primary" type="button">Listo</button>
         </div>
       </div>
     </div>

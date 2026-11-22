@@ -570,15 +570,11 @@ const PAINTERS = {
     paintOre(p, C.coal, [86, 84, 92], 5);
   },
 
-  // Antorcha (etapa 15): el palito ocupa las columnas 7 y 8 (lo que recorta
-  // la caja del piso); el fuego, las 3 filas de arriba de la caja.
+  // Antorcha (etapa 15): el palito de la caja del piso recorta las columnas
+  // 7 y 8; el fuego, las 3 filas de arriba de la caja.
   torch(p) {
-    paintTorch(p, 6, [7, 8]);
-    // Un resplandor suave alrededor del fuego (solo se ve en el ícono).
-    for (const x of [6, 9]) {
-      p.set(x, 6, [255, 214, 120, 110]);
-      p.set(x, 7, [255, 180, 80, 70]);
-    }
+    // Las columnas 6 y 9 solo se ven en el ícono (más gordito).
+    paintTorch(p, 6, [6, 7, 8, 9]);
   },
 
   // Contra la pared la caja va más arriba (filas 2 a 11) y se ve de todo

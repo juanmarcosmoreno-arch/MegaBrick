@@ -23,9 +23,13 @@ import { Hud } from './ui/Hud.js';
 import { Menu } from './ui/Menu.js';
 import { DEFAULT_HOTBAR, Hotbar, HOTBAR_SIZE } from './ui/Hotbar.js';
 import { Inventory } from './ui/Inventory.js';
+import { BackpackMenu } from './ui/BackpackMenu.js';
+import { Backpack } from './items/Backpack.js';
+import * as items from './items/items.js';
+import * as recipes from './items/recipes.js';
+import { breakSeconds, dropFor, itemName } from './items/items.js';
 import { BlockOutline } from './render/BlockOutline.js';
 import { HeldItem } from './render/HeldItem.js';
-import { getBlockGeometry } from './render/blockGeometry.js';
 import { BlockInteraction } from './player/Interaction.js';
 import { Multiplayer } from './net/Multiplayer.js';
 import { MultiplayerMenu } from './ui/MultiplayerMenu.js';
@@ -180,12 +184,29 @@ class Game {
     this.hud = new Hud(document.getElementById('hud'));
     this.hotbar = new Hotbar(this.hud.root, this.atlas.canvas);
     this.hotbar.onChange = (id) => this.onHeldBlockChange(id);
-    this.onHeldBlockChange(this.hotbar.selectedBlock);
+    this.onHeldBlockChange(this.hotbar.selectedItem);
     this.inventory = new Inventory({
       hotbar: this.hotbar,
       atlas: this.atlas.canvas,
       onClose: (resume) => this.closeInventory(resume),
     });
+    // Modo aventura (etapa 15): la mochila con lo que se juntó y su menú.
+    /** 'creativo' o 'aventura' (lo decide el mundo). */
+    this.mode = 'creativo';
+    this.backpack = new Backpack();
+    this.backpackMenu = new BackpackMenu({
+      backpack: this.backpack,
+      hotbar: this.hotbar,
+      atlas: this.atlas.canvas,
+      onClose: (resume) => this.closeInventory(resume),
+      onCraft: () => this.sounds.play('place', this.hotbar.selectedBlock ?? 0),
+    });
+    this.backpack.onChange = () => {
+      this.hotbar.render();
+      if (this.backpackMenu.isOpen) this.backpackMenu.render();
+      // Si cambió lo que hay en la mano (se gastó, se movió), a la mano.
+      if (this.hotbar.selectedItem !== this._heldId) this.onHeldBlockChange(this.hotbar.selectedItem);
+    };
 
     // --- Animales ---
     this.animals = new Animals({ scene: this.scene, sounds: this.sounds });
@@ -206,6 +227,10 @@ class Game {
       animals: this.animals,
       onAnimal: (act, animal) => this.actOnAnimal(act, animal),
     });
+    // En aventura se tarda según la herramienta y lo que se rompe se junta.
+    this.interaction.breakTime = (block) =>
+      this.mode === 'aventura' ? breakSeconds(block, this.hotbar.selectedItem) : block.hardness;
+    this.interaction.onBroken = (ids) => this.collect(ids);
     this.menu = new Menu({
       onPlay: () => this.controls.lock(),
       onResume: () => this.controls.lock(),
@@ -335,8 +360,10 @@ class Game {
    * @param {{slots: number[], selected: number}} [o.hotbar]
    * @param {number} [o.time] hora del día (0 a 1; si no se indica, sigue la actual)
    * @param {object} [o.save] datos del guardado de este mundo (ver WorldSaves.setCurrent)
+   * @param {string} [o.mode] 'aventura' o 'creativo' (si no se indica, creativo)
+   * @param {unknown} [o.backpack] la mochila guardada (modo aventura)
    */
-  loadWorld({ seed, seedText, generation = GENERATION, edits, spawn, look, hotbar, time, save }) {
+  loadWorld({ seed, seedText, generation = GENERATION, edits, spawn, look, hotbar, time, save, mode, backpack }) {
     this.saves.saveIfWorthIt();
     this.world.dispose();
     this.scene.remove(this.world.group);
@@ -358,6 +385,7 @@ class Game {
     this.player.spawn(s.x, s.y, s.z, look?.yaw ?? this.player.yaw, look?.pitch ?? this.player.pitch);
     this.player.setFlying(Boolean(look?.flying));
     if (hotbar) this.hotbar.setSlots(hotbar.slots, hotbar.selected);
+    this.setMode(mode, backpack);
     this.saves.setCurrent(save);
     this.world.preload(s.x, s.z, 1);
     this.animals.reset();
@@ -375,6 +403,8 @@ class Game {
       hotbar: data.hotbar ?? { slots: DEFAULT_HOTBAR, selected: 0 },
       time: data.time,
       save: data.save,
+      mode: data.mode,
+      backpack: data.backpack,
     });
   }
 
@@ -433,7 +463,7 @@ class Game {
   }
 
   /** Crea un mundo nuevo (semilla al azar si no se elige) y entra a jugarlo. */
-  newWorld({ name, seedText }) {
+  newWorld({ name, seedText, mode }) {
     if (!this.confirmLeaveWorld()) return;
     const seed = seedText ? parseSeed(seedText) : crypto.getRandomValues(new Uint32Array(1))[0];
     this.loadWorld({
@@ -443,6 +473,7 @@ class Game {
       hotbar: { slots: DEFAULT_HOTBAR, selected: 0 },
       time: START_TIME,
       save: { name },
+      mode,
     });
     this.controls.lock();
   }
@@ -540,10 +571,50 @@ class Game {
     this.camera.updateProjectionMatrix();
   }
 
-  /** El bloque elegido en la hotbar va a la mano (primera y tercera persona). */
+  /**
+   * Modo aventura: lo que se rompió va a la mochila (lo que dé cada bloque
+   * con la herramienta de la mano). Avisa lo que se juntó, o si no entra.
+   * @param {number[]} ids bloques rotos
+   */
+  collect(ids) {
+    if (this.mode !== 'aventura') return;
+    const tool = this.hotbar.selectedItem;
+    const got = [];
+    let full = false;
+    for (const id of ids) {
+      const drop = dropFor(id, tool);
+      if (!drop) continue;
+      const left = this.backpack.add(drop.id, drop.count);
+      if (left < drop.count) got.push(`+${drop.count - left} ${itemName(drop.id)}`);
+      if (left > 0) full = true;
+    }
+    if (full) this.hud.toast('La mochila está llena', 2);
+    else if (got.length) this.hotbar.showText(got.join('  '));
+  }
+
+  /**
+   * Cambia el modo del mundo: 'aventura' (mochila, fabricar, sin volar) o
+   * 'creativo' (todos los materiales y se vuela).
+   * @param {string} mode
+   * @param {unknown} [backpack] lo guardado en la mochila (ver Backpack.toJSON)
+   */
+  setMode(mode, backpack) {
+    this.mode = mode === 'aventura' ? 'aventura' : 'creativo';
+    this.backpack.load(this.mode === 'aventura' ? backpack : null);
+    this.hotbar.setBackpack(this.mode === 'aventura' ? this.backpack : null);
+    if (this.mode === 'aventura') this.player.setFlying(false);
+  }
+
+  /** El menú de la tecla E: la mochila (aventura) o los materiales (creativo). */
+  get inventoryMenu() {
+    return this.mode === 'aventura' ? this.backpackMenu : this.inventory;
+  }
+
+  /** Lo elegido en la hotbar va a la mano (primera y tercera persona). */
   onHeldBlockChange(id) {
-    this.heldItem.setBlock(id);
-    this.avatar.setHeldBlock(getBlockGeometry(id), this.materials);
+    this._heldId = id;
+    this.heldItem.setItem(id);
+    this.avatar.setHeldItem(id, this.materials);
   }
 
   /** Teclas 1-9, rueda del mouse y LB/RB del joystick: elegir casilla de la hotbar. */
@@ -628,7 +699,7 @@ class Game {
   openInventory() {
     this.state = STATE.INVENTORY;
     this.interaction.release();
-    this.inventory.open();
+    this.inventoryMenu.open();
     // Se suelta el mouse para poder elegir (no es una pausa: ver onLockChange).
     this.controls.unlock();
   }
@@ -640,6 +711,7 @@ class Game {
   closeInventory(resume) {
     if (this.state !== STATE.INVENTORY) return;
     this.inventory.close();
+    this.backpackMenu.close();
     if (resume) this.controls.lock();
     else this.pause();
   }
@@ -648,6 +720,7 @@ class Game {
   pause() {
     this.state = STATE.PAUSED;
     this.inventory.close();
+    this.backpackMenu.close();
     this.interaction.release();
     this.menu.showPause();
     // Si la palanca sigue inclinada, que no mueva el foco de la pausa.
@@ -657,7 +730,7 @@ class Game {
 
   /** Joystick B en un menú: cierra el panel abierto o, en la pausa, sigue jugando. */
   padBack() {
-    if (this.inventory.isOpen) this.closeInventory(true);
+    if (this.inventory.isOpen || this.backpackMenu.isOpen) this.closeInventory(true);
     else if (!this.optionsMenu.panel.hidden) this.optionsMenu.close();
     else if (!this.multiplayerMenu.panel.hidden) this.multiplayerMenu.close();
     else if (!this.worldsMenu.newPanel.hidden || !this.worldsMenu.listPanel.hidden) this.worldsMenu.closeAll();
@@ -668,6 +741,7 @@ class Game {
   padStart() {
     const panelOpen =
       this.inventory.isOpen ||
+      this.backpackMenu.isOpen ||
       !this.optionsMenu.panel.hidden ||
       !this.multiplayerMenu.panel.hidden ||
       !this.worldsMenu.newPanel.hidden ||
@@ -724,10 +798,12 @@ class Game {
       } else if (!this._materialsHintShown) {
         this._materialsHintShown = true;
         const key = this.controls.padPlaying ? this.controls.pad.labels.BACK : 'E';
-        this.hud.toast(`${key}: todos los materiales para construir`, 3);
+        const what = this.mode === 'aventura' ? 'la mochila y fabricar' : 'todos los materiales para construir';
+        this.hud.toast(`${key}: ${what}`, 3);
       }
       this.state = STATE.PLAYING;
       this.inventory.close();
+      this.backpackMenu.close();
       this.menu.hideAll();
       this.worldsMenu.closeAll();
       this.multiplayerMenu.close();
@@ -908,7 +984,7 @@ class Game {
     if (this.state === STATE.INVENTORY) {
       // Vista (como E) cierra el menú de materiales y vuelve a jugar.
       if (this.controls.pad.wasPressed(PAD.BACK)) this.closeInventory(true);
-      else this.inventory.update(this.controls.pad);
+      else this.inventoryMenu.update(this.controls.pad);
     }
     if (this.state !== STATE.PLAYING) this.padMenu.update(dt);
 
@@ -951,7 +1027,9 @@ class Game {
       if (this.state === STATE.PLAYING) {
         const pad = this.controls.pad;
         if (this.controls.wasPressed('KeyV') || pad.wasPressed(PAD.X)) this.hud.toast(this.view.cycle());
-        if (this.controls.wasPressed('KeyF') || pad.wasPressed(PAD.Y)) {
+        if ((this.controls.wasPressed('KeyF') || pad.wasPressed(PAD.Y)) && this.mode === 'aventura') {
+          this.hud.toast('En el modo aventura no se vuela');
+        } else if (this.controls.wasPressed('KeyF') || pad.wasPressed(PAD.Y)) {
           this.player.setFlying(!this.player.flying);
           const { A, B } = pad.labels;
           const how = this.controls.lastDevice === 'pad' ? `${A} sube, ${B} baja` : 'Espacio sube, Shift baja';
@@ -1003,9 +1081,11 @@ function showFatalError(message) {
 try {
   const game = new Game(document.getElementById('game'));
   // Acceso desde la consola del navegador para depurar: window.megabrick
-  // (y la tabla de bloques en window.megabrick.bloques).
+  // (y las tablas de bloques, objetos y recetas).
   window.megabrick = game;
   game.bloques = { BLOCK, getBlock };
+  game.items = items;
+  game.recipes = recipes;
 } catch (err) {
   console.error(err);
   // Sin juego, el botón "Jugar" no haría nada: se desactiva y se avisa.

@@ -168,6 +168,9 @@ export class WorldSaves {
       },
       hotbar: { slots: [...g.hotbar.slots], selected: g.hotbar.selected },
       time: g.sky.time,
+      // Modo aventura (etapa 15) y lo que hay en la mochila.
+      mode: g.mode,
+      backpack: g.mode === 'aventura' ? g.backpack.toJSON() : null,
     };
     this.status = 'saving';
     this.onChange?.();
@@ -213,6 +216,9 @@ export class WorldSaves {
       player,
       hotbar: Array.isArray(meta.hotbar?.slots) ? meta.hotbar : null,
       time: isNum(meta.time) ? meta.time : START_TIME,
+      // Los de antes de la etapa 15 son del modo creativo.
+      mode: meta.mode === 'aventura' ? 'aventura' : 'creativo',
+      backpack: Array.isArray(meta.backpack) ? meta.backpack : null,
       save: { id: meta.id, name: cleanWorldName(meta.name) ?? 'Mundo', createdAt: meta.createdAt ?? null },
     };
   }

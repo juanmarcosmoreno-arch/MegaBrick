@@ -30,7 +30,7 @@ export class WorldsMenu {
    * @param {object} o
    * @param {() => boolean} o.canChangeWorld si se puede cambiar de mundo (no durante una partida)
    * @param {(id: number) => Promise<void>} o.onPlayWorld jugar un mundo guardado
-   * @param {(o: {name: string|null, seedText: string}) => void} o.onNewWorld crear un mundo y jugarlo
+   * @param {(o: {name: string|null, seedText: string, mode: string}) => void} o.onNewWorld crear un mundo y jugarlo
    * @param {(id: number) => Promise<void>} o.onDeleteWorld borrar un mundo
    */
   constructor(saves, { canChangeWorld, onPlayWorld, onNewWorld, onDeleteWorld }) {
@@ -66,9 +66,29 @@ export class WorldsMenu {
     });
     $('nw-back').addEventListener('click', () => this.closeAll());
     $('worlds-back').addEventListener('click', () => this.closeAll());
+    // Modo del mundo nuevo (aventura o creativo): opciones tipo radio.
+    this.modeButtons = [...document.querySelectorAll('#nw-mode .mode-option')];
+    this.mode = 'aventura';
+    const pickMode = (mode, focus) => {
+      this.mode = mode;
+      for (const b of this.modeButtons) {
+        const on = b.dataset.mode === mode;
+        b.setAttribute('aria-checked', String(on));
+        b.tabIndex = on ? 0 : -1;
+        if (on && focus) b.focus();
+      }
+    };
+    for (const b of this.modeButtons) b.addEventListener('click', () => pickMode(b.dataset.mode, false));
+    $('nw-mode').addEventListener('keydown', (e) => {
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (!step) return;
+      e.preventDefault();
+      const i = this.modeButtons.findIndex((b) => b.dataset.mode === this.mode);
+      pickMode(this.modeButtons[(i + step + this.modeButtons.length) % this.modeButtons.length].dataset.mode, true);
+    });
     const create = () => {
       this.closeAll();
-      onNewWorld({ name: cleanWorldName(this.nameInput.value), seedText: this.seedInput.value.trim() });
+      onNewWorld({ name: cleanWorldName(this.nameInput.value), seedText: this.seedInput.value.trim(), mode: this.mode });
     };
     $('nw-create').addEventListener('click', create);
     for (const input of [this.nameInput, this.seedInput]) {
@@ -184,7 +204,7 @@ export class WorldsMenu {
       name.textContent = cleanWorldName(w.name) ?? 'Mundo';
       const meta = document.createElement('span');
       // La semilla al final: si es larga, se corta ella y no la fecha.
-      meta.textContent = `${timeAgo(w.playedAt)}${isCurrent ? ' · abierto' : ''} · Semilla: ${w.seedText}`;
+      meta.textContent = `${timeAgo(w.playedAt)}${isCurrent ? ' · abierto' : ''}${w.mode === 'aventura' ? ' · Aventura' : ''} · Semilla: ${w.seedText}`;
       meta.title = `Semilla: ${w.seedText}`;
       info.append(name, meta);
 

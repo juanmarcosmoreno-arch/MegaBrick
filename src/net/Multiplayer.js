@@ -325,7 +325,7 @@ export class Multiplayer {
       speed: g.state === 'playing' ? p.horizontalSpeed : 0,
       flying: p.flying && !p.onGround,
       expr: g.avatar.baseExpression,
-      held: g.hotbar.selectedBlock,
+      held: g.hotbar.selectedItem ?? 0,
       swing: this._swing,
       color: g.avatar.variant,
       character: g.avatar.character,
@@ -497,6 +497,8 @@ export class Multiplayer {
       // Dónde está el anfitrión: el invitado aparece a su lado.
       spawn: { x: g.player.position.x, y: g.player.position.y, z: g.player.position.z },
       time: g.sky.time,
+      // Modo del mundo (etapa 15): en aventura cada uno junta en su mochila.
+      mode: g.mode,
     });
     this._broadcast({ t: MSG.JOIN, ...info }, from);
     this._addPlayer(info);
@@ -591,6 +593,7 @@ export class Multiplayer {
       spawn: hostPos,
       time: Number.isFinite(msg.time) ? msg.time : undefined,
       save: { foreign: true, name: `Mundo de ${host?.name ?? 'otro'}` },
+      mode: msg.mode === 'aventura' ? 'aventura' : 'creativo',
     });
     if (hostPos) this._placeBeside(hostPos, others.map(cleanPosition).filter(Boolean));
     this.role = 'guest';

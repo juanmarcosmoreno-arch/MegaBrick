@@ -9,6 +9,9 @@
 
 import * as THREE from 'three';
 import { createHumanoid } from './characters/humanoid.js';
+import { getBlockGeometry } from '../render/blockGeometry.js';
+import { getItemTexture, itemMaterial, itemPlane, lightColor } from '../render/itemMesh.js';
+import { isBlockItem } from '../items/items.js';
 import { DEFAULT_CHARACTER, getCharacter, isCharacter } from './characters/index.js';
 import { DEFAULT_VARIANT, EXPRESSIONS, VARIANTS, isVariant } from './colors.js';
 
@@ -55,6 +58,7 @@ export class Avatar {
     this.model.root.traverse((o) => o.material && this._materials.add(o.material));
     if (this._light) this.setLight(...this._light);
     if (this.heldBlock) this.model.hand.add(this.heldBlock);
+    if (this.heldFlat) this.model.hand.add(this.heldFlat);
     this.model.setExpression(this.baseExpression);
   }
 
@@ -92,6 +96,39 @@ export class Avatar {
     const t = 1.2 * curve(block);
     const clamp = (v) => Math.min(1.3, v);
     for (const m of this._materials) m.color.setRGB(clamp(s + t), clamp(s + 0.72 * t), clamp(s + 0.42 * t));
+    if (this.heldFlat) lightColor(this.heldFlat.material.color, sky, block);
+  }
+
+  /**
+   * Lo que tiene en la mano derecha: un bloque, un objeto (herramienta,
+   * mineral: un dibujo plano) o nada (null).
+   * @param {number | null} id
+   * @param {THREE.Material[]} blockMaterials materiales de bloques por capa
+   */
+  setHeldItem(id, blockMaterials) {
+    if (isBlockItem(id)) {
+      this.setHeldBlock(getBlockGeometry(id), blockMaterials);
+      if (this.heldFlat) this.heldFlat.visible = false;
+      return;
+    }
+    this.setHeldBlock(null);
+    const tex = id === null ? null : getItemTexture(id);
+    if (!tex) {
+      if (this.heldFlat) this.heldFlat.visible = false;
+      return;
+    }
+    if (!this.heldFlat) {
+      this.heldFlat = new THREE.Mesh(itemPlane(), itemMaterial());
+      this.heldFlat.scale.setScalar(0.5);
+      // Agarrado por el mango: el dibujo va de costado, hacia adelante.
+      this.heldFlat.rotation.set(0, Math.PI / 2, Math.PI / 4);
+      this.heldFlat.position.set(0, 0.12, 0.12);
+      this.model.hand.add(this.heldFlat);
+      if (this._light) lightColor(this.heldFlat.material.color, ...this._light);
+    }
+    this.heldFlat.material.map = tex;
+    this.heldFlat.material.needsUpdate = true;
+    this.heldFlat.visible = true;
   }
 
   /** Golpe con el brazo al romper o poner un bloque. */
@@ -144,6 +181,7 @@ export class Avatar {
   /** Libera geometrías, materiales y texturas (el bloque en la mano es compartido). */
   dispose() {
     if (this.heldBlock) this.heldBlock.removeFromParent();
+    this.heldFlat?.material.dispose();
     this.model.dispose();
   }
 }

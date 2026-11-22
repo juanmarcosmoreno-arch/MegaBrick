@@ -118,6 +118,19 @@ body {
   image-rendering: pixelated;
 }
 
+/* Cuántos hay (modo aventura), abajo a la derecha de la casilla. */
+.hotbar-count {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  font: 700 12px/1 var(--font-ui);
+  color: var(--cream);
+  text-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.9),
+    0 0 3px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
 .hotbar-slot.selected {
   border-color: var(--lime);
   background: rgba(166, 204, 12, 0.18);
@@ -902,4 +915,166 @@ kbd {
 .pad-nav .inv-slot:focus {
   outline: 3px solid var(--cream);
   outline-offset: 2px;
+}
+
+/* ---------- Mochila (modo aventura) ---------- */
+
+.backpack {
+  width: min(900px, 100%);
+}
+
+.bp-body {
+  display: flex;
+  gap: 18px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.bp-left {
+  flex: none;
+}
+
+.bp-slots {
+  display: grid;
+  grid-template-columns: repeat(9, 46px);
+  gap: 4px;
+}
+
+.bp-slot {
+  width: 46px;
+  height: 46px;
+}
+
+.bp-slot img {
+  width: 34px;
+  height: 37px;
+}
+
+/* La hotbar, separada de la mochila. */
+.bp-slot.bp-hotbar {
+  margin-top: 8px;
+}
+
+.bp-slot.selected {
+  border-color: rgba(240, 234, 228, 0.5);
+}
+
+.bp-slot.picked {
+  border-color: var(--lime);
+  background: rgba(166, 204, 12, 0.22);
+  box-shadow: 0 0 0 2px rgba(166, 204, 12, 0.35);
+}
+
+.bp-right {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.bp-right h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.bp-recipes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  max-height: min(380px, calc(100vh - 230px));
+  padding-right: 4px;
+}
+
+.bp-recipe {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 2px solid rgba(240, 234, 228, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--cream);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bp-recipe img {
+  width: 32px;
+  height: 34px;
+  image-rendering: pixelated;
+  flex: none;
+}
+
+.bp-recipe-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bp-recipe-text small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.bp-recipe:hover:not(:disabled) {
+  border-color: rgba(240, 234, 228, 0.45);
+}
+
+.bp-recipe:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.bp-recipe:focus-visible,
+.pad-nav .bp-recipe:focus {
+  outline: 3px solid var(--cream);
+  outline-offset: 1px;
+}
+
+/* ---------- Modo del mundo nuevo ---------- */
+
+.mode-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mode-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 2px solid rgba(240, 234, 228, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--cream);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mode-option small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mode-option[aria-checked='true'] {
+  border-color: var(--lime);
+  background: rgba(166, 204, 12, 0.14);
+}
+
+.mode-option:focus-visible,
+.pad-nav .mode-option:focus {
+  outline: 3px solid var(--cream);
+  outline-offset: 1px;
+}
+
+@media (max-width: 760px) {
+  .bp-body {
+    flex-direction: column;
+  }
 }

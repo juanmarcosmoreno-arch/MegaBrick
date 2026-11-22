@@ -4,9 +4,13 @@
 import * as THREE from 'three';
 import { getBlockGeometry } from './blockGeometry.js';
 import { aoOnlyShader, itemLightShader } from './materials.js';
+import { getItemTexture, itemMaterial, itemPlane, lightColor } from './itemMesh.js';
+import { isBlockItem } from '../items/items.js';
 
 const REST = new THREE.Vector3(0.56, -0.5, -0.95); // posición respecto de la cámara
 const SWING_TIME = 0.25;
+/** Sin bloque en la mano. */
+const EMPTY = new THREE.BufferGeometry();
 
 export class HeldItem {
   /**
@@ -35,14 +39,35 @@ export class HeldItem {
     this.mesh.position.copy(REST);
     this.mesh.frustumCulled = false;
     camera.add(this.mesh);
+    // Objetos que no son bloques (herramientas, minerales): un dibujo plano,
+    // inclinado como si se lo agarrara del mango.
+    const flatMaterial = itemMaterial();
+    flatMaterial.depthTest = false;
+    flatMaterial.depthWrite = false;
+    flatMaterial.transparent = true;
+    this.flat = new THREE.Mesh(itemPlane(), flatMaterial);
+    this.flat.renderOrder = 1000;
+    this.flat.scale.setScalar(1.4);
+    this.flat.rotation.set(0, Math.PI / 2 - 0.35, 0);
+    this.flat.position.set(0, 0.55, 0);
+    this.flat.visible = false;
+    this.mesh.add(this.flat);
     this.camera = camera;
     this._swing = 0;
     this._queued = false;
     this._bob = 0;
   }
 
-  setBlock(id) {
-    this.mesh.geometry = getBlockGeometry(id);
+  /** Lo que se tiene en la mano: un bloque, un objeto o nada (null). */
+  setItem(id) {
+    const block = isBlockItem(id);
+    this.mesh.geometry = block ? getBlockGeometry(id) : EMPTY;
+    const tex = !block && id !== null ? getItemTexture(id) : null;
+    this.flat.visible = Boolean(tex);
+    if (tex) {
+      this.flat.material.map = tex;
+      this.flat.material.needsUpdate = true;
+    }
   }
 
   /**
@@ -52,6 +77,7 @@ export class HeldItem {
    */
   setLight(sky, block) {
     this.light.set(sky, block);
+    lightColor(this.flat.material.color, sky, block);
   }
 
   setVisible(visible) {

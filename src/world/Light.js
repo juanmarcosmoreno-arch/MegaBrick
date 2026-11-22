@@ -30,14 +30,17 @@ export const MAX_LIGHT = 15;
 
 /** Bloques que no dejan pasar la luz (los cubos opacos). */
 export const BLOCKS_LIGHT = new Uint8Array(MAX_BLOCK_IDS);
-/** Cuánto más pierde la luz al pasar (agua y follaje la apagan un poco). */
+/**
+ * Cuánto más pierde la luz al pasar: el follaje la apaga un poco (sombra
+ * en el bosque). El agua no: si no, el fondo del mar se vería negro.
+ */
 const FILTER = new Uint8Array(MAX_BLOCK_IDS);
 /** Luz que da cada bloque (0: ninguna). */
 export const EMIT = new Uint8Array(MAX_BLOCK_IDS);
 for (const block of BLOCKS) {
   if (!block) continue;
   BLOCKS_LIGHT[block.id] = block.opaque ? 1 : 0;
-  FILTER[block.id] = block.liquid || block.leaves || block.sound === 'leaves' ? 1 : 0;
+  FILTER[block.id] = block.leaves || block.sound === 'leaves' ? 1 : 0;
   // Lo que brilla solo (faroles, lámparas prendidas) da luz plena.
   EMIT[block.id] = block.light ?? (block.layer === LAYER.GLOW ? MAX_LIGHT : 0);
 }

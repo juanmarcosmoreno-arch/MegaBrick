@@ -12,6 +12,7 @@
 
 import { createNoise2D, createNoise3D } from 'simplex-noise';
 import { BLOCK, getBlock } from './blocks.js';
+import { VillagePlanner } from './Villages.js';
 import { CHUNK_HEIGHT, CHUNK_SIZE, CHUNK_VOLUME, Chunk } from './Chunk.js';
 
 /**
@@ -19,9 +20,9 @@ import { CHUNK_HEIGHT, CHUNK_SIZE, CHUNK_VOLUME, Chunk } from './Chunk.js';
  * generado, así que uno guardado con una versión se sigue generando con
  * esa: 1 es el terreno de las etapas 2 a 11 (solo robles, sin plantas ni
  * nieve); 2 suma pinos, jacarandás, nieve y plantas (etapa 12); 3 suma
- * cuevas y carbón (etapa 15).
+ * cuevas y carbón (etapa 15); 4 suma las aldeas (etapa 16).
  */
-export const GENERATION = 3;
+export const GENERATION = 4;
 
 /**
  * La versión del generador de un mundo guardado o recibido: una de las que
@@ -136,6 +137,8 @@ export class TerrainGenerator {
     this.nTunnelA = noise3(1); // túneles: donde los dos ruidos valen casi 0
     this.nTunnelB = noise3(2);
     this.nCavern = noise3(3); // cavernas grandes
+    /** Aldeas (desde la generación 4; ver Villages.js). */
+    this.villages = this.generation >= 4 ? new VillagePlanner(this.seed, (x, z) => this.heightAt(x, z)) : null;
   }
 
   /** Ruido fractal (fBm): suma de octavas, resultado aproximado en [-1, 1]. */
@@ -230,6 +233,9 @@ export class TerrainGenerator {
     if (this.generation >= 3) this._carveCaves(data, cx, cz);
     this._placeOres(data, cx, cz);
 
+    // Aldeas (pisan el terreno: cimientos, caminos, casas).
+    if (this.villages) maxY = Math.max(maxY, this.villages.stamp(data, cx, cz));
+
     // 3) Árboles: se miran también las celdas vecinas, porque la copa de un
     // árbol de otro chunk puede caer adentro de este.
     maxY = Math.max(maxY, this._placeTrees(data, cx, cz));
@@ -265,7 +271,9 @@ export class TerrainGenerator {
         const x = x0 + lx;
         const z = z0 + lz;
         const h = this.heightAt(x, z);
-        const top = h <= SEA_LEVEL + 2 ? Math.min(h - 6, SEA_LEVEL - 6) : h;
+        let top = h <= SEA_LEVEL + 2 ? Math.min(h - 6, SEA_LEVEL - 6) : h;
+        // Debajo de una aldea, las cuevas no llegan arriba (no se hunde nada).
+        if (this.villages?.inVillage(x, z, 4)) top = Math.min(top, h - 10);
         for (let y = CAVE_FLOOR; y <= top; y++) {
           if (this.isCave(x, y, z)) data[Chunk.index(lx, y, lz)] = BLOCK.AIR;
         }
@@ -348,8 +356,9 @@ export class TerrainGenerator {
       for (let gx = g0x; gx <= g1x; gx++) {
         const t = this.treeInCell(gx, gz);
         if (!t) continue;
-        // Si una cueva se comió el suelo, no hay árbol.
+        // Si una cueva se comió el suelo, no hay árbol; en una aldea, tampoco.
         if (this.generation >= 3 && this.isCave(t.x, t.base - 1, t.z)) continue;
+        if (this.villages?.inVillage(t.x, t.z, TREE_RADIUS + 1)) continue;
         const top = t.base + t.trunk; // primera altura por encima del tronco
         const { log, leaves, layers } = TREE_KINDS[t.kind];
         // Copa: capas de hojas (altura relativa a la punta del tronco y radio).

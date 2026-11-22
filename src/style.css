@@ -1078,3 +1078,18 @@ kbd {
     flex-direction: column;
   }
 }
+
+/* ---------- Comerciar con un aldeano ---------- */
+
+.trade {
+  width: min(560px, 100%);
+}
+
+.trade-offers {
+  max-height: min(440px, calc(100vh - 220px));
+}
+
+.trade-arrow {
+  color: var(--muted);
+  font-weight: 700;
+}

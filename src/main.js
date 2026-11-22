@@ -24,6 +24,8 @@ import { Menu } from './ui/Menu.js';
 import { DEFAULT_HOTBAR, Hotbar, HOTBAR_SIZE } from './ui/Hotbar.js';
 import { Inventory } from './ui/Inventory.js';
 import { BackpackMenu } from './ui/BackpackMenu.js';
+import { TradeMenu } from './ui/TradeMenu.js';
+import { PROFESSIONS, villagerInfo } from './villages/people.js';
 import { Backpack } from './items/Backpack.js';
 import * as items from './items/items.js';
 import * as recipes from './items/recipes.js';
@@ -201,15 +203,25 @@ class Game {
       onClose: (resume) => this.closeInventory(resume),
       onCraft: () => this.sounds.play('place', this.hotbar.selectedBlock ?? 0),
     });
+    // Comerciar con los aldeanos (etapa 16).
+    this.tradeMenu = new TradeMenu({
+      backpack: this.backpack,
+      atlas: this.atlas.canvas,
+      onClose: (resume) => this.closeInventory(resume),
+      onTrade: () => this.sounds.play('place', BLOCK.GLASS),
+    });
     this.backpack.onChange = () => {
       this.hotbar.render();
       if (this.backpackMenu.isOpen) this.backpackMenu.render();
+      if (this.tradeMenu.isOpen) this.tradeMenu.render();
       // Si cambió lo que hay en la mano (se gastó, se movió), a la mano.
       if (this.hotbar.selectedItem !== this._heldId) this.onHeldBlockChange(this.hotbar.selectedItem);
     };
 
     // --- Animales ---
     this.animals = new Animals({ scene: this.scene, sounds: this.sounds });
+    // Aldeanos (etapa 16): aparecen en las aldeas del mundo actual.
+    this.animals.villageSource = (x, z, r) => this.generator.villages?.villagesTouching(x - r, z - r, x + r, z + r) ?? [];
 
     // --- Romper y poner bloques (y acariciar o empujar animales) ---
     this.outline = new BlockOutline(this.scene);
@@ -605,9 +617,26 @@ class Game {
     if (this.mode === 'aventura') this.player.setFlying(false);
   }
 
-  /** El menú de la tecla E: la mochila (aventura) o los materiales (creativo). */
+  /** El menú abierto (o el de la tecla E: la mochila en aventura, los materiales en creativo). */
   get inventoryMenu() {
+    if (this.tradeMenu.isOpen) return this.tradeMenu;
     return this.mode === 'aventura' ? this.backpackMenu : this.inventory;
+  }
+
+  /**
+   * Clic derecho sobre un aldeano: en aventura se abre su puesto para
+   * comerciar; en creativo saluda (ahí se tiene todo).
+   */
+  talkTo(animal) {
+    const who = villagerInfo(animal.id);
+    if (this.mode !== 'aventura') {
+      this.hud.toast(`${who.name}: «¡Hola! ${PROFESSIONS[who.profession].greeting}»`, 3);
+      return;
+    }
+    this.state = STATE.INVENTORY;
+    this.interaction.release();
+    this.tradeMenu.open(animal.id);
+    this.controls.unlock();
   }
 
   /** Lo elegido en la hotbar va a la mano (primera y tercera persona). */
@@ -635,6 +664,8 @@ class Game {
     this.heldItem.swing();
     this.avatar.swing();
     this.multiplayer.countAction();
+    // A un aldeano se le habla (y se queda quieto mirándote).
+    if (act === 'pet' && animal.kind.villager) this.talkTo(animal);
     if (this.multiplayer.role === 'guest') {
       this.multiplayer.sendAnimalAct(animal.id, act);
       return;
@@ -712,6 +743,7 @@ class Game {
     if (this.state !== STATE.INVENTORY) return;
     this.inventory.close();
     this.backpackMenu.close();
+    this.tradeMenu.close();
     if (resume) this.controls.lock();
     else this.pause();
   }
@@ -721,6 +753,7 @@ class Game {
     this.state = STATE.PAUSED;
     this.inventory.close();
     this.backpackMenu.close();
+    this.tradeMenu.close();
     this.interaction.release();
     this.menu.showPause();
     // Si la palanca sigue inclinada, que no mueva el foco de la pausa.
@@ -730,7 +763,7 @@ class Game {
 
   /** Joystick B en un menú: cierra el panel abierto o, en la pausa, sigue jugando. */
   padBack() {
-    if (this.inventory.isOpen || this.backpackMenu.isOpen) this.closeInventory(true);
+    if (this.inventory.isOpen || this.backpackMenu.isOpen || this.tradeMenu.isOpen) this.closeInventory(true);
     else if (!this.optionsMenu.panel.hidden) this.optionsMenu.close();
     else if (!this.multiplayerMenu.panel.hidden) this.multiplayerMenu.close();
     else if (!this.worldsMenu.newPanel.hidden || !this.worldsMenu.listPanel.hidden) this.worldsMenu.closeAll();
@@ -742,6 +775,7 @@ class Game {
     const panelOpen =
       this.inventory.isOpen ||
       this.backpackMenu.isOpen ||
+      this.tradeMenu.isOpen ||
       !this.optionsMenu.panel.hidden ||
       !this.multiplayerMenu.panel.hidden ||
       !this.worldsMenu.newPanel.hidden ||
@@ -804,6 +838,7 @@ class Game {
       this.state = STATE.PLAYING;
       this.inventory.close();
       this.backpackMenu.close();
+      this.tradeMenu.close();
       this.menu.hideAll();
       this.worldsMenu.closeAll();
       this.multiplayerMenu.close();
@@ -872,6 +907,13 @@ class Game {
       r._light ??= { sky: 1, block: 0 };
       const l = this._smoothLight(r._light, q.x, q.y + 1, q.z, dt);
       r.avatar.setLight(l.sky, l.block);
+    }
+    // Los aldeanos también (adentro de una casa o de noche junto a un farol).
+    for (const a of this.animals.list.values()) {
+      if (!a.model.setLight) continue;
+      a._light ??= { sky: 1, block: 0 };
+      const l = this._smoothLight(a._light, a.position.x, a.position.y + 1, a.position.z, dt);
+      a.model.setLight(l.sky, l.block);
     }
   }
 

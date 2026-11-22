@@ -25,7 +25,7 @@ function angleDiff(a, b) {
 }
 
 /** Cartel con el nombre (un sprite que siempre mira a la cámara). */
-function nameTag(name) {
+export function nameTag(name) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   const font = '600 40px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';

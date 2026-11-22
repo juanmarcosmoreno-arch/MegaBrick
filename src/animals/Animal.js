@@ -92,6 +92,8 @@ export class Animal {
     this._near = FOLLOW_NEAR + ((id * 0.618) % 1) * FOLLOW_SPREAD;
     /** El modelo (lo arma y lo dibuja Animals.js). */
     this.model = null;
+    /** Aldeanos: su aldea {x, z, r} (pasean adentro). */
+    this.home = null;
     this.callTimer = rand(...kind.callEvery);
   }
 
@@ -133,6 +135,15 @@ export class Animal {
 
   /** Que lo acarició un jugador: contento y después lo sigue un rato. */
   pet(player) {
+    // Un aldeano se queda charlando: quieto, de frente al jugador (no lo sigue).
+    if (this.kind.villager) {
+      this._setMode('happy', 1.2);
+      this.followId = null;
+      this._talkUntil = 20;
+      this.yaw = Math.atan2(-(player.x - this.position.x), -(player.z - this.position.z));
+      this.velocity.x = this.velocity.z = 0;
+      return;
+    }
     this._setMode('happy', 1.4);
     this.followId = player.id;
     this.velocity.x = this.velocity.z = 0;
@@ -173,6 +184,12 @@ export class Animal {
       this._setMode('follow', FOLLOW_TIME);
       return;
     }
+    // Charlando con un jugador (comerciando): quieto un rato.
+    if (this._talkUntil > 0) {
+      this._setMode('idle', this._talkUntil);
+      this._talkUntil = 0;
+      return;
+    }
     const roll = Math.random();
     const p = this.position;
     const onGrass = world.getBlock(Math.floor(p.x), Math.floor(p.y - 0.05), Math.floor(p.z)) === BLOCK.GRASS;
@@ -182,7 +199,7 @@ export class Animal {
         this._setMode('wander', 14);
         return;
       }
-    } else if (roll < 0.85 && onGrass && !this.inWater) {
+    } else if (roll < 0.85 && onGrass && !this.inWater && this.kind.eats !== false) {
       this._setMode('eat', rand(2, 5));
       return;
     }
@@ -195,11 +212,21 @@ export class Animal {
    */
   _findSpot(world) {
     const p = this.position;
+    const home = this.home;
     for (let i = 0; i < 6; i++) {
       const a = rand(0, Math.PI * 2);
       const d = rand(3, 9);
-      const x = p.x + Math.sin(a) * d;
-      const z = p.z + Math.cos(a) * d;
+      let x = p.x + Math.sin(a) * d;
+      let z = p.z + Math.cos(a) * d;
+      // Un aldeano no se va de su aldea (y si quedó afuera, vuelve).
+      if (home) {
+        const out = Math.hypot(p.x - home.x, p.z - home.z) > home.r;
+        if (out) {
+          const k = d / Math.max(1, Math.hypot(home.x - p.x, home.z - p.z));
+          x = p.x + (home.x - p.x) * k;
+          z = p.z + (home.z - p.z) * k;
+        } else if (Math.hypot(x - home.x, z - home.z) > home.r) continue;
+      }
       if (!world.isLoadedAt(x, z)) continue;
       const ground = groundBelow(world, x, p.y + 3, z, 7);
       if (!ground) continue;

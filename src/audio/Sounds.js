@@ -228,6 +228,12 @@ const VOICES = {
     happy: [{ type: 'sine', f0: 1500, f1: 2300, at: 0, dur: 0.08, gain: 0.12 }, { type: 'sine', f0: 1600, f1: 2400, at: 0.12, dur: 0.08, gain: 0.1 }],
     scared: [{ type: 'sine', f0: 140, f1: 60, at: 0, dur: 0.12, gain: 0.5 }],
   },
+  aldeano: {
+    // Murmullos: "mm-hm", "¡hola!" y un "¡ay!".
+    call: [{ type: 'triangle', f0: 190, f1: 170, at: 0, dur: 0.18, gain: 0.22, lowpass: 900 }, { type: 'triangle', f0: 210, f1: 240, at: 0.22, dur: 0.16, gain: 0.2, lowpass: 900 }],
+    happy: [{ type: 'triangle', f0: 230, f1: 300, at: 0, dur: 0.14, gain: 0.24, lowpass: 1100 }, { type: 'triangle', f0: 300, f1: 260, at: 0.17, dur: 0.18, gain: 0.22, lowpass: 1100 }],
+    scared: [{ type: 'triangle', f0: 360, f1: 240, at: 0, dur: 0.16, gain: 0.26, lowpass: 1400 }],
+  },
 };
 
 /** Bloques caminados entre paso y paso. */

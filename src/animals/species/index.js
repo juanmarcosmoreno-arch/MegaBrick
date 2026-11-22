@@ -6,6 +6,7 @@ import * as carpincho from './carpincho.js';
 import * as oveja from './oveja.js';
 import * as gallina from './gallina.js';
 import * as conejo from './conejo.js';
+import * as aldeano from '../../villages/aldeano.js';
 
 /**
  * Comportamiento de cada especie:
@@ -14,13 +15,17 @@ import * as conejo from './conejo.js';
  * - idleTime: cuánto se queda quieto [mínimo, máximo] (segundos).
  * - callEvery: cada cuánto hace su sonido [mínimo, máximo] (segundos).
  * - likesWater: elige pasear por el agua (los demás nadan solo si caen).
- * - weight: qué tan común es.
+ * - weight: qué tan común es (0: no aparece al azar).
+ * - villager: es un aldeano (etapa 16): aparece en su aldea, pasea por
+ *   ella y no sigue a nadie; con clic derecho se comercia (ver villages/).
+ * - eats: si pasta (los aldeanos no).
  */
 const KINDS = {
   carpincho: { module: carpincho, walk: 1.1, run: 3.6, group: [2, 4], idleTime: [3, 9], callEvery: [14, 40], likesWater: true, weight: 1 },
   oveja: { module: oveja, walk: 1.2, run: 4, group: [2, 4], idleTime: [2, 6], callEvery: [10, 30], likesWater: false, weight: 1.2 },
   gallina: { module: gallina, walk: 1.3, run: 4.2, group: [2, 4], idleTime: [1, 4], callEvery: [6, 18], likesWater: false, weight: 1 },
   conejo: { module: conejo, walk: 2, run: 5.5, group: [1, 3], idleTime: [1, 5], callEvery: [20, 50], likesWater: false, weight: 0.8 },
+  aldeano: { module: aldeano, walk: 1.3, run: 3.4, group: [1, 1], idleTime: [3, 9], callEvery: [25, 70], likesWater: false, weight: 0, villager: true, eats: false },
 };
 
 /** Ids de las especies, en orden (el índice es el número en la red). */
@@ -43,6 +48,7 @@ export function randomSpecies() {
   const total = SPECIES_IDS.reduce((sum, id) => sum + KINDS[id].weight, 0);
   let r = Math.random() * total;
   for (const id of SPECIES_IDS) {
+    if (!KINDS[id].weight) continue;
     r -= KINDS[id].weight;
     if (r <= 0) return id;
   }

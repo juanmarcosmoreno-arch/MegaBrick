@@ -12,9 +12,13 @@
 import * as THREE from 'three';
 import { ACTIONS, Animal, groundBelow } from './Animal.js';
 import { SPECIES_IDS, getKind, randomSpecies } from './species/index.js';
+import { villagerId, villagerInfo } from '../villages/people.js';
 import { BLOCK, SHAPE, getBlock } from '../world/blocks.js';
 import { CHUNK_HEIGHT } from '../world/Chunk.js';
 import { moveAxis } from '../world/collision.js';
+
+/** Oficio de un aldeano (su variante). */
+const villagerProfession = (id) => villagerInfo(id).profession;
 
 /** Cada cuánto se prueba hacer aparecer un grupo (segundos). */
 const SPAWN_EVERY = 1.2;
@@ -40,6 +44,10 @@ const FAR_ANIMATION = 36;
 const SEPARATE_RATE = 6;
 /** Cada cuánto manda el anfitrión los animales (segundos). */
 export const NET_INTERVAL = 0.2;
+/** Los aldeanos aparecen cuando un jugador está a menos de esto de su casa. */
+const VILLAGER_SPAWN = 60;
+/** Hasta dónde pasea un aldeano desde el centro de su aldea. */
+const VILLAGE_ROAM = 26;
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const randInt = ([a, b]) => a + Math.floor(Math.random() * (b - a + 1));
@@ -64,6 +72,12 @@ export class Animals {
     this._time = 0;
     this._frame = 0;
     this.hearts = new Hearts(this.group);
+    /**
+     * Aldeas cerca de un punto (etapa 16): (x, z, r) => [{id, x, z,
+     * houses: [{spot: {x, y, z}}]}]. La pone el juego (las da el generador).
+     * @type {((x: number, z: number, r: number) => object[]) | null}
+     */
+    this.villageSource = null;
   }
 
   get count() {
@@ -97,6 +111,7 @@ export class Animals {
         this._spawnTimer = SPAWN_EVERY;
         this._despawn(world, players, viewDistance);
         this._spawn(world, players, viewDistance);
+        this._spawnVillagers(world, players);
       }
       for (const a of this.list.values()) a.update(dt, world, players);
       this._separate(world, dt);
@@ -216,10 +231,12 @@ export class Animals {
 
   /** Hace aparecer un grupo cerca de algún jugador que tenga pocos animales. */
   _spawn(world, players, viewDistance) {
-    if (this.list.size >= MAX_TOTAL) return;
+    // Los aldeanos no cuentan: son aparte.
+    const animals = [...this.list.values()].filter((a) => !a.kind.villager);
+    if (animals.length >= MAX_TOTAL) return;
     for (const pl of players) {
       let near = 0;
-      for (const a of this.list.values()) if (Math.hypot(a.position.x - pl.x, a.position.z - pl.z) < NEAR_RADIUS) near++;
+      for (const a of animals) if (Math.hypot(a.position.x - pl.x, a.position.z - pl.z) < NEAR_RADIUS) near++;
       if (near >= MAX_NEAR) continue;
       const angle = rand(0, Math.PI * 2);
       const d = rand(SPAWN_MIN, SPAWN_MAX);
@@ -235,7 +252,7 @@ export class Animals {
       const base = Math.floor(Math.random() * variants);
       const n = randInt(kind.group);
       let made = 0;
-      for (let i = 0; i < n * 3 && made < n && this.list.size < MAX_TOTAL; i++) {
+      for (let i = 0; i < n * 3 && made < n && animals.length + made < MAX_TOTAL; i++) {
         const gx = Math.floor(x + rand(-3, 3)) + 0.5;
         const gz = Math.floor(z + rand(-3, 3)) + 0.5;
         const spot = grassAt(world, gx, gz);
@@ -245,6 +262,29 @@ export class Animals {
         made++;
       }
       if (made) return;
+    }
+  }
+
+  /**
+   * Los aldeanos de las aldeas cercanas a algún jugador: uno por casa, que
+   * aparece frente a su puerta (si no está ya). Se van como los animales,
+   * cuando todos se alejan, y vuelven a aparecer en su casa.
+   */
+  _spawnVillagers(world, players) {
+    if (!this.villageSource) return;
+    const kind = getKind('aldeano');
+    for (const pl of players) {
+      for (const v of this.villageSource(pl.x, pl.z, VILLAGER_SPAWN)) {
+        v.houses.forEach((h, i) => {
+          const id = villagerId(v.id, i);
+          if (this.list.has(id)) return;
+          const { x, y, z } = h.spot;
+          if (!world.isLoadedAt(x, z) || Math.hypot(x - pl.x, z - pl.z) > VILLAGER_SPAWN) return;
+          const a = new Animal(id, 'aldeano', kind, villagerProfession(id), x, y, z);
+          a.home = { x: v.x + 0.5, z: v.z + 0.5, r: VILLAGE_ROAM };
+          this._add(a);
+        });
+      }
     }
   }
 
@@ -274,7 +314,7 @@ export class Animals {
   }
 
   _add(a) {
-    a.model = a.kind.module.createModel(THREE, { variant: a.variant });
+    a.model = a.kind.module.createModel(THREE, { variant: a.variant, id: a.id });
     a.model.root.name = a.species;
     this.group.add(a.model.root);
     this.list.set(a.id, a);

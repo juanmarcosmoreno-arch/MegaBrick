@@ -35,6 +35,7 @@ El juego se construye por etapas. Siempre queda una versión jugable.
 | 13 | Mecanismos: cable de cobrizo, palanca, botón, placa de presión, lámpara, inversor, retardador, timbre y pistones; puertas, trampillas y tranqueras que se abren con energía | ✅ |
 | 14 | Personajes para elegir: normal, soldado, vikingo, deportista, skater, gaucho, astronauta y bombero, con el color de la ropa | ✅ |
 | 15 | Cuevas y carbón, luz de verdad (cuevas oscuras, antorchas) y modo aventura: mochila, juntar minerales, fabricar herramientas y bloques | ✅ |
+| 16 | Aldeas con casas, caminos y faroles, y aldeanos manejados por la máquina que comercian a cambio de minerales | ✅ |
 
 ## Requisitos
 
@@ -209,9 +210,10 @@ El mundo es infinito y se genera a medida que te movés, en chunks de 16 × 16 b
 - **Agua:** el mar está a una altura fija (y = 40) y es semitransparente. Hay arena en costas y fondos poco profundos.
 - **Árboles:** se agrupan en bosques y también aparecen sueltos. En las alturas son pinos, y en el llano a veces hay jacarandás en flor. Sus copas pasan de un chunk a otro sin cortarse.
 - **Plantas:** pasto alto suelto, flores (margaritas, ceibos y flores celestes) por manchones, y en el bosque helechos y algún hongo. Las cumbres más altas tienen nieve.
-- **Mundos de antes:** cada mundo recuerda con qué versión del generador se creó. Los guardados antes de la etapa 12 se siguen generando igual que siempre (solo con los árboles de antes, sin plantas ni nieve), así lo que construiste o sacaste queda como estaba; los nuevos traen todo lo nuevo.
+- **Mundos de antes:** cada mundo recuerda con qué versión del generador se creó. Los guardados antes de la etapa 12 se siguen generando igual que siempre (solo con los árboles de antes, sin plantas ni nieve), así lo que construiste o sacaste queda como estaba; lo mismo los de antes de la etapa 15 (sin cuevas) y de la 16 (sin aldeas). Los nuevos traen todo lo nuevo.
 - **Minerales:** carbón, cobrizo, azurita y solarita aparecen en vetas dentro de la piedra. El carbón es el más común; cuanto más raro el mineral, más hondo. La solarita brilla un poco en la oscuridad.
 - **Cuevas:** túneles largos que serpentean (a veces salen a la superficie: son las entradas) y cavernas grandes en lo hondo, con los minerales a la vista en las paredes. Bajo el mar dejan un techo de piedra, así el agua nunca queda colgando sobre un hueco. Los mundos creados antes de la etapa 15 no tienen cuevas (se siguen generando igual).
+- **Aldeas:** cada tanto, en terreno llano y lejos del agua y de las montañas, hay una aldea: una plaza con un pozo, de 2 a 4 caminos de grava con faroles y de 3 a 7 casas de madera, piedra, revoque o ladrillo, con techo a dos aguas de tejas o tablones, puerta, ventanas, antorchas en la entrada y un farol adentro. Las casas se apoyan sobre cimientos que siguen el terreno; en las aldeas no crecen árboles ni se abren cuevas hacia arriba. Solo en los mundos creados desde la etapa 16.
 - **Carga de chunks:** se generan y mallan en segundo plano (ver [Rendimiento](#rendimiento)), primero los más cercanos al jugador y los que tiene adelante. Los lejanos se liberan de la memoria.
 - **Niebla:** tiene el color del horizonte (cambia con la hora) y tapa el borde del área cargada.
 
@@ -253,6 +255,26 @@ Al crear un mundo se elige el modo: **Aventura** (el que viene marcado) o **Crea
 - **Sin vuelo:** en el modo aventura no se vuela. Tampoco hay vida ni hambre: nadie se lastima.
 - **Se guarda:** el modo y la mochila se guardan con el mundo. En **Mis mundos** los de aventura dicen "Aventura".
 - **Multijugador:** la partida tiene el modo del mundo del anfitrión; cada uno junta y fabrica en su propia mochila (la de un invitado empieza vacía y no se guarda). Cada uno ve lo que el otro tiene en la mano.
+
+## Aldeanos
+
+En cada aldea vive un aldeano por casa. Son personajes como los de los jugadores (normal, soldado, vikingo, gaucho...) con su nombre y su oficio arriba de la cabeza, pero los maneja la máquina: pasean por su aldea (no se van), te miran cuando estás cerca y murmuran. Si los empujás se asustan.
+
+- **Comerciar (clic derecho, modo aventura):** se queda quieto mirándote y abre su puesto. Cada oficio ofrece lo suyo a cambio de minerales (y algunos compran lo que te sobra). Un clic en una oferta hace el trueque una vez, con lo que tenés en la mochila:
+
+  | Oficio | Ofrece |
+  |---|---|
+  | Herrero/a | Bloque de hierro, rejas, chapa, chapa oxidada, pico de azurita; compra empedrado |
+  | Albañil/a | Revoques de colores, hormigón, baldosa calcárea, venecitas, tejas |
+  | Vidriero/a | Vidrios de colores y ventanas |
+  | Tejedor/a | Alfombras de colores y paja |
+  | Jardinero/a | Flores, helechos, hongos y cactus; compra troncos |
+  | Farolero/a | Antorchas, faroles y lámparas; compra vidrio |
+
+  Así se consiguen en aventura las cosas que no se fabrican.
+- **En creativo:** te saludan (ahí ya tenés todo).
+- **Multijugador:** los mueve el anfitrión, como a los animales, y todos ven a los mismos aldeanos con su nombre y oficio. Cada uno comercia con su propia mochila.
+- No se guardan: cuando todos se alejan de la aldea se van a su casa, y al volver aparecen frente a su puerta.
 
 ## Animales
 
@@ -317,11 +339,15 @@ src/
     Mesher.js           → una malla por chunk con solo las caras visibles, oclusión y luz por vértice (sin DOM: corre en los workers)
     TerrainGen.js       → terreno procedural con semilla: alturas, capas, agua, cuevas, árboles y minerales
     Light.js            → luz del cielo y de los bloques (0 a 15), con los 9 chunks de alrededor
+    Villages.js         → aldeas: dónde van y su plano (plaza, caminos, faroles y casas), estampado por chunk
   items/
     items.js            → objetos del modo aventura (minerales, palo, herramientas): qué da cada bloque y cuánto tarda
     recipes.js          → recetas para fabricar desde la mochila
     Backpack.js         → la mochila: 36 casillas con lo que se juntó
     itemIcons.js        → íconos de los objetos en pixel art, dibujados por código
+  villages/
+    people.js           → los aldeanos: nombre, oficio, cómo se ven y sus trueques (todo sale de su número)
+    aldeano.js          → el modelo del aldeano (un personaje con su cartel), como una especie más de animal
   animals/
     Animals.js          → los animales del mundo: aparecen y se van, los corazones, la red
     Animal.js           → un animal: su cuerpo (choques, salto, nado) y lo que hace (pasear, pastar, escapar, seguir)
@@ -353,6 +379,7 @@ src/
     Hotbar.js           → las 9 casillas de bloques (en aventura, las de la mochila con cuántos hay)
     Inventory.js        → menú de materiales (tecla E, creativo): todos los bloques por grupos
     BackpackMenu.js     → mochila del modo aventura (tecla E): mover casillas y fabricar
+    TradeMenu.js        → comerciar con un aldeano (clic derecho, modo aventura)
     Menu.js             → pantalla de inicio (con selector de color) y menú de pausa
     MultiplayerMenu.js  → panel de multijugador, lista de jugadores y datos en la pausa
     WorldsMenu.js       → Continuar/Jugar, nuevo mundo, lista de mundos (jugar y borrar) y estado del guardado
